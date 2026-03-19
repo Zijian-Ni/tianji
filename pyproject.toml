@@ -1,0 +1,69 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tianji"
+version = "0.1.0"
+description = "Python library for Chinese metaphysics — BaZi (八字), Liu Yao (六爻), Zi Wei Dou Shu (紫微斗数)"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Zijian Ni", email = "zijian@tianji-metaphysics.dev" }]
+keywords = ["bazi", "liuyao", "ziwei", "chinese metaphysics", "八字", "六爻", "紫微斗数"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+    "Natural Language :: Chinese (Simplified)",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "lunardate>=0.2.0",
+    "pydantic>=2.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+]
+
+[project.optional-dependencies]
+llm = ["openai>=1.0.0"]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "httpx>=0.24.0",
+]
+all = ["tianji[llm,dev]"]
+
+[project.urls]
+Homepage = "https://github.com/Zijian-Ni/tianji"
+Repository = "https://github.com/Zijian-Ni/tianji"
+Issues = "https://github.com/Zijian-Ni/tianji/issues"
+Changelog = "https://github.com/Zijian-Ni/tianji/blob/main/CHANGELOG.md"
+
+[project.scripts]
+tianji = "tianji.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tianji"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--tb=short"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = false
+ignore_missing_imports = true
