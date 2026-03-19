@@ -49,11 +49,11 @@ class ZiWeiChart:
         ming_position = (2 + self.month - 1 - hour_branch) % 12
 
         # Step 2: Place all 12 palaces starting from Ming
-        for i, name in enumerate(PALACE_NAMES):
+        for i, (palace_name, _english, _meaning) in enumerate(PALACE_NAMES):
             pos = (ming_position + i) % 12
             branch = EARTHLY_BRANCHES[pos]
-            self.palaces[name] = ChartPalace(
-                name=name,
+            self.palaces[palace_name] = ChartPalace(
+                name=palace_name,
                 position=pos,
                 branch=branch.char,
                 stars=[],

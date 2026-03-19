@@ -1,38 +1,44 @@
 ---
-name: Bug report / 问题报告
-about: Create a report to help us improve / 报告一个 Bug
-title: '[BUG] '
+name: Bug Report / 问题反馈
+about: Report a bug or incorrect calculation / 报告错误或计算不准确
+title: "[BUG] "
 labels: bug
-assignees: ''
+assignees: Zijian-Ni
 ---
 
-## Bug Description / 问题描述
+## 问题描述 / Bug Description
 
-A clear and concise description of what the bug is.
-请清晰简洁地描述问题。
+<!-- 简要描述问题 / Briefly describe the issue -->
 
-## To Reproduce / 复现步骤
+## 复现步骤 / Steps to Reproduce
 
 ```python
-# Minimal reproducible example / 最小复现代码
+# 请提供最小复现代码 / Please provide minimal reproduction code
 from tianji.bazi import BaZiChart
-# ...
+...
 ```
 
-## Expected behavior / 期望行为
+## 期望结果 / Expected Result
 
-What you expected to happen. / 描述期望的结果。
+<!-- 正确的计算结果应该是什么 / What should the correct result be? -->
 
-## Actual behavior / 实际行为
+## 实际结果 / Actual Result
 
-What actually happened. / 描述实际发生的情况。
+<!-- 实际得到的错误结果 / What did you actually get? -->
 
-## Environment / 环境
+## 参考来源 / Reference Source
 
-- OS: [e.g. Ubuntu 22.04 / Windows 11 / macOS 14]
-- Python version: [e.g. 3.11]
-- tianji version: [e.g. 0.1.0]
+<!-- 如果是算法错误，请注明参考依据 / If algorithmic error, please note your reference -->
+- [ ] 万年历 / Traditional almanac
+- [ ] 命理书籍 / Classic text: ___
+- [ ] 其他软件对比 / Comparison with other software: ___
 
-## Additional context / 其他信息
+## 环境信息 / Environment
 
-Add any other context about the problem here.
+- Python version:
+- tianji version:
+- OS:
+
+## 附加信息 / Additional Context
+
+<!-- 其他相关信息 -->

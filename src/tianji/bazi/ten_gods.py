@@ -22,13 +22,13 @@ from tianji.calendar.heavenly_stems import (
 TEN_GOD_INFO: dict[str, dict] = {
     "比肩": {
         "name": "比肩",
-        "english": "Rob Wealth (Parallel)",
+        "english": "Companion (Parallel Shoulder)",
         "meaning": "兄弟、朋友、竞争、自我意志",
         "polarity": "same",
     },
     "劫财": {
         "name": "劫财",
-        "english": "Rob Wealth (Divergent)",
+        "english": "Rob Wealth (Sibling)",
         "meaning": "兄弟、竞争、劫夺财运",
         "polarity": "different",
     },

@@ -1,34 +1,27 @@
 ---
-name: Feature request / 功能请求
-about: Suggest an idea for this project / 为项目提出新功能建议
-title: '[FEAT] '
+name: Feature Request / 功能建议
+about: Suggest a new feature or improvement / 建议新功能或改进
+title: "[FEAT] "
 labels: enhancement
-assignees: ''
+assignees: Zijian-Ni
 ---
 
-## Feature Description / 功能描述
+## 功能描述 / Feature Description
 
-A clear and concise description of what you want. / 请清晰简洁地描述您希望添加的功能。
+<!-- 简要描述你希望添加的功能 / Briefly describe the feature you'd like -->
 
-## Motivation / 动机
+## 使用场景 / Use Case
 
-Why is this feature needed? What problem does it solve? / 为什么需要这个功能？它解决了什么问题？
+<!-- 说明此功能的应用场景 / Describe when and why this would be useful -->
 
-## Proposed Solution / 建议方案
+## 可能的实现方式 / Possible Implementation
 
-How would you like this to work? / 您希望如何实现这个功能？
+<!-- （可选）你对实现方式的想法 / (Optional) Your thoughts on how to implement this -->
 
-```python
-# Example API / 示例接口
-from tianji.bazi import ...
-```
+## 参考资料 / References
 
-## Alternatives Considered / 替代方案
+<!-- 命理/玄学参考资料 / Metaphysics references -->
 
-Any other solutions you've considered. / 您考虑过的其他解决方案。
+## 附加信息 / Additional Context
 
-## References / 参考资料
-
-Classical texts, algorithm references, etc. / 经典文献、算法参考等。
-
-## Additional context / 其他信息
+<!-- 其他相关信息或截图 -->

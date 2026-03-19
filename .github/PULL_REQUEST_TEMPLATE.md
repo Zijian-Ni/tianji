@@ -1,38 +1,34 @@
-## Summary / 摘要
+## 变更说明 / Description
 
-Brief description of changes. / 简要描述本次改动。
+<!-- 描述此 PR 的目的和主要变更 / Describe the purpose and main changes -->
 
-## Type of Change / 改动类型
+## 变更类型 / Type of Change
 
-- [ ] Bug fix / 修复 Bug
-- [ ] New feature / 新功能
-- [ ] Algorithm improvement / 算法改进
-- [ ] Documentation update / 文档更新
-- [ ] Refactor / 代码重构
-- [ ] Tests / 测试
+- [ ] 🐛 Bug 修复 / Bug fix
+- [ ] ✨ 新功能 / New feature
+- [ ] 📚 算法改进 / Algorithm improvement
+- [ ] 📖 文档更新 / Documentation update
+- [ ] 🧪 测试 / Tests
+- [ ] 🔧 重构 / Refactor
 
-## Related Issues / 相关 Issue
+## 测试说明 / Testing
 
-Fixes #(issue number)
+<!-- 说明如何测试此变更 / Describe how to test this change -->
 
-## Changes / 改动详情
+- [ ] 已运行现有测试 `pytest tests/` / Existing tests pass
+- [ ] 已添加新测试 / Added new tests
+- [ ] 已验证算法准确性 / Algorithm accuracy verified
 
-- Change 1
-- Change 2
+## 算法验证 / Algorithm Verification
 
-## Algorithm Source / 算法来源
+<!-- 如涉及命理算法，请说明验证依据 / If metaphysics algorithm, describe verification basis -->
 
-For metaphysical algorithms, cite your source:
-对于玄学算法，请注明参考来源：
+- 参考来源 / Reference:
+- 验证案例 / Test cases:
 
-- [ ] Classical text (please specify): ___
-- [ ] Modern reference: ___
-- [ ] Self-derived from first principles
+## 检查清单 / Checklist
 
-## Checklist / 检查清单
-
-- [ ] Tests pass: `pytest`
-- [ ] Code formatted: `ruff format .`
-- [ ] Lint clean: `ruff check .`
-- [ ] CHANGELOG.md updated
-- [ ] Documentation updated (if applicable)
+- [ ] 代码风格符合项目规范 / Code follows project style
+- [ ] 已更新相关文档 / Documentation updated
+- [ ] 所有测试通过 / All tests pass
+- [ ] 无明显计算错误 / No obvious calculation errors

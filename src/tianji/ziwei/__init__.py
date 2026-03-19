@@ -6,11 +6,11 @@ into 12 palaces to reveal destiny patterns.
 """
 
 from tianji.ziwei.palaces import Palace, build_palace_ring, PALACE_NAMES
-from tianji.ziwei.stars import Star, MAJOR_STARS, AUXILIARY_STARS, place_all_major_stars
-from tianji.ziwei.chart import ZiWeiChart
+from tianji.ziwei.stars import MAJOR_STARS, place_ziwei_group, place_tianfu_group
+from tianji.ziwei.chart import ZiWeiChart, create_ziwei_chart
 
 __all__ = [
     "Palace", "build_palace_ring", "PALACE_NAMES",
-    "Star", "MAJOR_STARS", "AUXILIARY_STARS", "place_all_major_stars",
-    "ZiWeiChart",
+    "MAJOR_STARS", "place_ziwei_group", "place_tianfu_group",
+    "ZiWeiChart", "create_ziwei_chart",
 ]
