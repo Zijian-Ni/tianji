@@ -1,0 +1,148 @@
+/* ============================================================
+   AURORA SKIN · Theme B「链墨 / Ledger Ink」 — 天机 tianji
+   Loaded AFTER css/style.css. CSP-safe: no external fonts,
+   no inline handlers. Deepens the existing gold/cinnabar
+   identity into a full ink-paper archive: warm ink ground,
+   serif display, paper fiber, seal-stamped hero.
+   Scoped to [data-theme="dark"] so the light toggle survives.
+   ============================================================ */
+
+[data-theme="dark"] {
+  --color-bg:            #100e0b;      /* ink paper, warm */
+  --color-bg-raised:     #17140f;
+  --color-bg-card:       #17140f;
+  --color-bg-input:      #1d1912;
+  --color-bg-overlay:    rgba(12, 10, 7, .84);
+  --color-surface:       #1e1a13;
+
+  --color-border:        rgba(214, 190, 140, .2);
+  --color-border-subtle: rgba(214, 190, 140, .09);
+  --color-border-strong: rgba(214, 190, 140, .38);
+
+  --color-text:          #ece4d4;
+  --color-text-muted:    #9a8f7a;
+  --color-text-faint:    #6b6355;
+
+  --color-primary:       #d5442e;      /* 朱砂 */
+  --color-primary-hover: #e0553c;
+  --color-gold:          #c9a86a;      /* 描金 */
+  --color-gold-bright:   #dfc189;
+
+  --gradient-primary:    linear-gradient(135deg, #d5442e 0%, #c9a86a 100%);
+  --gradient-gold:       linear-gradient(135deg, #c9a86a 0%, #dfc189 100%);
+  --gradient-card:       linear-gradient(180deg, rgba(201, 168, 106, .05) 0%, transparent 100%);
+  --gradient-hero:       radial-gradient(ellipse at 50% 0%, rgba(201, 168, 106, .09) 0%, transparent 60%);
+  --gradient-glow:       radial-gradient(circle, rgba(201, 168, 106, .14) 0%, transparent 70%);
+
+  /* 链墨 serif stack — system fonts only (CSP) */
+  --ink-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
+}
+
+/* ---- particle canvas retires; paper fiber takes over ---- */
+[data-theme="dark"] #bg-canvas { display: none; }
+[data-theme="dark"] .ink-grain {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.85 0 0 0 0 0.78 0 0 0 0 0.62 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+[data-theme="light"] .ink-grain { display: none; }
+
+/* ---- display type: 宋体大字 ---- */
+[data-theme="dark"] .hero-title,
+[data-theme="dark"] .logo,
+[data-theme="dark"] .card-header h2,
+[data-theme="dark"] .divider-ornament {
+  font-family: var(--ink-serif);
+  font-weight: 900;
+  letter-spacing: .1em;
+}
+[data-theme="dark"] .hero-title { letter-spacing: .18em; }
+[data-theme="dark"] .hero-subtitle { letter-spacing: .3em; color: var(--color-gold); }
+
+/* ---- the taiji mark steadies: slow ink rotation, no glow ---- */
+[data-theme="dark"] .hero-taiji {
+  filter: sepia(.5) hue-rotate(-18deg) saturate(1.4);
+  opacity: .9;
+}
+
+/* ---- seal stamp (injected by js/aurora-ink.js into .hero) ---- */
+[data-theme="dark"] .ink-seal {
+  width: 72px; height: 72px; margin: 22px auto 0;
+  border: 3px solid var(--color-primary); border-radius: 7px;
+  display: grid; place-items: center; transform: rotate(-4deg);
+  color: var(--color-primary);
+  font-family: var(--ink-serif); font-weight: 900; font-size: 22px;
+  letter-spacing: .08em; line-height: 1.3; text-align: center;
+  box-shadow: inset 0 0 18px rgba(213, 68, 46, .12);
+  animation: inkStamp .7s cubic-bezier(.2, 1.6, .3, 1) .35s backwards;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cfilter id='r'%3E%3CfeTurbulence baseFrequency='0.5' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.6 -0.25'/%3E%3C/filter%3E%3Crect width='90' height='90' fill='%23fff' filter='url(%23r)'/%3E%3C/svg%3E");
+}
+@keyframes inkStamp {
+  0%   { transform: rotate(-4deg) scale(2);   opacity: 0; }
+  60%  { transform: rotate(-4deg) scale(.95); opacity: 1; }
+  100% { transform: rotate(-4deg) scale(1); }
+}
+[data-theme="light"] .ink-seal { display: none; }
+
+/* ---- buttons: seal press ---- */
+[data-theme="dark"] .hero-cta,
+[data-theme="dark"] .btn-primary {
+  border-radius: 3px;
+  background: var(--color-primary);
+  letter-spacing: .22em;
+  box-shadow: 3px 3px 0 rgba(213, 68, 46, .25);
+  transition: transform .25s ease, box-shadow .25s ease;
+}
+[data-theme="dark"] .hero-cta:hover,
+[data-theme="dark"] .btn-primary:hover {
+  background: var(--color-primary-hover);
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 rgba(213, 68, 46, .3);
+}
+[data-theme="dark"] .btn-ghost { border-radius: 3px; letter-spacing: .1em; }
+[data-theme="dark"] .btn-ghost:hover { color: var(--color-gold); border-color: var(--color-gold); }
+
+/* ---- tabs: 卷标 ---- */
+[data-theme="dark"] .tab {
+  border-radius: 3px 3px 0 0;
+  font-family: var(--ink-serif); font-weight: 700; letter-spacing: .2em;
+}
+[data-theme="dark"] .tab.active {
+  color: var(--color-gold-bright);
+  border-bottom: 2px solid var(--color-primary);
+}
+
+/* ---- cards: bound volumes with gold hairlines ---- */
+[data-theme="dark"] .card {
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+}
+[data-theme="dark"] .card-header h2 {
+  display: flex; align-items: center; gap: 14px; letter-spacing: .22em;
+}
+[data-theme="dark"] .card-header h2::after {
+  content: ""; flex: 1; height: 1px; background: var(--color-border);
+}
+
+/* ---- inputs ---- */
+[data-theme="dark"] input,
+[data-theme="dark"] select {
+  border-radius: 3px;
+}
+[data-theme="dark"] input:focus,
+[data-theme="dark"] select:focus {
+  border-color: var(--color-gold);
+  box-shadow: 0 0 0 3px rgba(201, 168, 106, .12);
+}
+
+/* ---- divider ornament: 易·道·术 in gold seal script feel ---- */
+[data-theme="dark"] .divider-ornament {
+  color: var(--color-gold);
+  letter-spacing: .6em;
+  opacity: .8;
+}
+
+/* ---- motion safety ---- */
+@media (prefers-reduced-motion: reduce) {
+  .ink-seal { animation: none; }
+}
