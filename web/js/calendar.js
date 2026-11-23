@@ -251,7 +251,7 @@ const Calendar = (function () {
    * Convert a JS Date (or {year,month,day}) to its 60-cycle index.
    */
   function jiaziIndexForDate(d) {
-    if (!(d instanceof Date)) { d = _utcDate(d.year, d.month, d.day); }
+    d = d instanceof Date ? _utcDate(d.getFullYear(), d.getMonth() + 1, d.getDate()) : _utcDate(d.year, d.month, d.day);
     var delta = _daysBetween(_REFERENCE_DATE, d);
     return ((_REFERENCE_INDEX + delta) % 60 + 60) % 60;
   }
@@ -321,7 +321,7 @@ const Calendar = (function () {
    * @param {string} term — Solar term name (e.g. "立春")
    * @returns {{ year, month, day }} date components (UTC)
    */
-  function getSolarTermDate(year, term) {
+  function approximateSolarTermDate(year, term) {
     if (_TERM_LONGITUDES[term] === undefined) {
       throw new Error("Unknown solar term: " + term);
     }
@@ -344,16 +344,40 @@ const Calendar = (function () {
     return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
   }
 
-  /**
-   * Get the approximate date of 立春 (Start of Spring) for a given year.
-   * Typically falls on February 3-5.
-   */
+  const almanac = typeof TianjiAlmanac !== 'undefined' ? TianjiAlmanac : require('./almanac.js');
+
+  // These millisecond values encode Beijing wall-clock fields in UTC slots.
+  // Never feed them through local Date getters or device DST rules.
+  function termWallMillis(year, name) {
+    const termIndex = SOLAR_TERMS.indexOf(name);
+    if (termIndex < 0) throw new RangeError('Unknown solar term: ' + name);
+    const row = almanac.termMinutes[year - almanac.termStart];
+    if (row) return Date.UTC(year, 0, 1) + row[termIndex] * 60000;
+    const d = approximateSolarTermDate(year, name);
+    return Date.UTC(d.year, d.month - 1, d.day);
+  }
+
+  function getSolarTermDate(year, term) {
+    const d = new Date(termWallMillis(year, term));
+    return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+  }
+
   function lichunDate(year) {
-    var d = getSolarTermDate(year, "立春");
-    if (d.month > 3 || d.year !== year) {
-      return { year: year, month: 2, day: 4 };
+    return getSolarTermDate(year, '立春');
+  }
+
+  function monthWindow(wallMillis) {
+    const d = new Date(wallMillis);
+    const year = d.getUTCFullYear(), month = d.getUTCMonth();
+    function boundary(offset) {
+      const m = month + offset;
+      const term = SOLAR_TERMS[((m + 12) % 12) * 2];
+      return { term, millis: termWallMillis(year + Math.floor(m / 12), term) };
     }
-    return d;
+    const current = boundary(0);
+    return current.millis <= wallMillis
+      ? { previous: current, next: boundary(1) }
+      : { previous: boundary(-1), next: current };
   }
 
   /**
@@ -382,328 +406,51 @@ const Calendar = (function () {
   }
 
   // ────────────────────────────────────────────────────────────────────────
-  // Lunar Calendar (农历) — compressed data table approach
-  // ────────────────────────────────────────────────────────────────────────
-  //
-  // Each entry in LUNAR_DATA is a hex-encoded number for one lunar year.
-  //
-  // Encoding (20 bits per year):
-  //   bits 19-16 : leap month number (0 = no leap month, 1-12 = which month)
-  //   bit  15    : if there IS a leap month, 0 = leap month has 29 days,
-  //                1 = leap month has 30 days
-  //   bits 14-3  : 12 bits for months 1-12 (bit 14 = month 1, bit 3 = month 12);
-  //                1 = 30 days, 0 = 29 days
-  //   bits 2-0   : unused / reserved (0)
-  //
-  // New Year dates are stored separately for each year.
-  //
-  // Source: standard Chinese lunar calendar lookup table (1900-2100).
-  // ────────────────────────────────────────────────────────────────────────
-
-  /*
-   * Compressed lunar info for 1900-2100.
-   *
-   * Format per entry (integer):
-   *   bits 23-20 : leap month (0 = none, 1-12)
-   *   bit  19    : leap month big? (1 = 30 days, 0 = 29 days)
-   *   bits 18-7  : months 1-12 big flag (bit 18 = month 1 … bit 7 = month 12)
-   *                1 = 30 days, 0 = 29 days
-   *   bits 6-5   : unused
-   *   bits 4-0   : Lunar New Year day-of-January offset:
-   *                value = day of Lunar New Year in Jan or Feb;
-   *                if >= 32, subtract 31 to get February day.
-   *                (stored as the day number where Jan 1 = 1, Feb 1 = 32)
-   *
-   * We store this as two parallel arrays to keep it readable:
-   *   _LUNAR_YEAR_INFO  — month-length / leap info
-   *   _LUNAR_NEW_YEAR   — [month, day] of Lunar New Year (Gregorian)
-   */
-
-  // Lunar year info: each element = 0xLMDDDD
-  //   L    = leap month number (hex digit, 0-C)
-  //   M    = leap month size flag (0 or 8) in top nibble combined with L
-  //   DDDD = 12-bit month-length flags, month1 in MSB
-  //
-  // Compact representation: we store a single integer per year.
-  //   Bits 19-16 : leap month (0 = none)
-  //   Bit  15    : leap month has 30 days (1) or 29 (0)
-  //   Bits 14-3  : month 1..12 lengths (1=30, 0=29), bit14=month1
-  //   Bits 2-0   : reserved
-  //
-  // Lunar New Year is in _LNY as [month, day].
-
-  // We store the well-known lunar data table used by countless JS/C libraries.
-  // Each hex value encodes one lunar year (1900..2100).
-  //
-  // The standard encoding used here (same as the popular "lunar-calendar" libs):
-  //   0x04bd8  →  year 1900, etc.
-  //
-  // Hex value breakdown:
-  //   Bits 19..16 = leap month (0 = no leap)
-  //   Bit  16     = leap month big (1=30d) — overloaded with leap month number
-  //
-  // Actually, the most widespread encoding is simpler:
-  //   Bits 23..20 (top nibble of 6-hex-digit number): leap month (0=none)
-  //   Bit  16: leap month 30-day flag
-  //   Bits 15..4: months 1-12 (bit15=month1, bit4=month12), 1=30d 0=29d
-  //   Bits 3..0: offset used for new year (or stored separately)
-  //
-  // For clarity we use the well-established table from the "chinese-lunar" dataset.
-  // Each value is 5 hex digits (20 bits). Leap month info is in a separate nibble.
-
-  /**
-   * Standard lunar year data 1900-2100.
-   * Each entry packs month lengths + leap info into one number.
-   *
-   * Layout (most-used convention):
-   *   0xABCDE where:
-   *     A     = leap month number (0=none, 1-C hex = month 1-12)
-   *     B     = top 4 bits of month-data; bit3 of B = leap month 30-day flag
-   *     CDE   = remaining 12 bits of month-data
-   *   month-data (16 bits total, but only 13 used):
-   *     bit 12 = month 1, bit 11 = month 2, … bit 1 = month 12
-   *     bit 0  = leap month length (1=30, 0=29)  — only meaningful if A != 0
-   *
-   * Actually, for maximum compatibility, we use the ubiquitous table where:
-   *   Each entry has exactly the form used by the Hong Kong Observatory /
-   *   popular open-source implementations.
-   */
-  var _LUNAR_INFO = [
-    /* 1900 */ 0x04bd8, 0x04ae0, 0x0a570, 0x054d5, 0x0d260,
-    /* 1905 */ 0x0d950, 0x16554, 0x056a0, 0x09ad0, 0x055d2,
-    /* 1910 */ 0x04ae0, 0x0a5b6, 0x0a4d0, 0x0d250, 0x1d255,
-    /* 1915 */ 0x0b540, 0x0d6a0, 0x0ada2, 0x095b0, 0x14977,
-    /* 1920 */ 0x04970, 0x0a4b0, 0x0b4b5, 0x06a50, 0x06d40,
-    /* 1925 */ 0x1ab54, 0x02b60, 0x09570, 0x052f2, 0x04970,
-    /* 1930 */ 0x06566, 0x0d4a0, 0x0ea50, 0x06e95, 0x05ad0,
-    /* 1935 */ 0x02b60, 0x186e3, 0x092e0, 0x1c8d7, 0x0c950,
-    /* 1940 */ 0x0d4a0, 0x1d8a6, 0x0b550, 0x056a0, 0x1a5b4,
-    /* 1945 */ 0x025d0, 0x092d0, 0x0d2b2, 0x0a950, 0x0b557,
-    /* 1950 */ 0x06ca0, 0x0b550, 0x15355, 0x04da0, 0x0a5b0,
-    /* 1955 */ 0x14573, 0x052b0, 0x0a9a8, 0x0e950, 0x06aa0,
-    /* 1960 */ 0x0aea6, 0x0ab50, 0x04b60, 0x0aae4, 0x0a570,
-    /* 1965 */ 0x05260, 0x0f263, 0x0d950, 0x05b57, 0x056a0,
-    /* 1970 */ 0x096d0, 0x04dd5, 0x04ad0, 0x0a4d0, 0x0d4d4,
-    /* 1975 */ 0x0d250, 0x0d558, 0x0b540, 0x0b6a0, 0x195a6,
-    /* 1980 */ 0x095b0, 0x049b0, 0x0a974, 0x0a4b0, 0x0b27a,
-    /* 1985 */ 0x06a50, 0x06d40, 0x0af46, 0x0ab60, 0x09570,
-    /* 1990 */ 0x04af5, 0x04970, 0x064b0, 0x074a3, 0x0ea50,
-    /* 1995 */ 0x06b58, 0x05ac0, 0x0ab60, 0x096d5, 0x092e0,
-    /* 2000 */ 0x0c960, 0x0d954, 0x0d4a0, 0x0da50, 0x07552,
-    /* 2005 */ 0x056a0, 0x0abb7, 0x025d0, 0x092d0, 0x0cab5,
-    /* 2010 */ 0x0a950, 0x0b4a0, 0x0baa4, 0x0ad50, 0x055d9,
-    /* 2015 */ 0x04ba0, 0x0a5b0, 0x15176, 0x052b0, 0x0a930,
-    /* 2020 */ 0x07954, 0x06aa0, 0x0ad50, 0x05b52, 0x04b60,
-    /* 2025 */ 0x0a6e6, 0x0a4e0, 0x0d260, 0x0ea65, 0x0d530,
-    /* 2030 */ 0x05aa0, 0x076a3, 0x096d0, 0x04afb, 0x04ad0,
-    /* 2035 */ 0x0a4d0, 0x1d0b6, 0x0d250, 0x0d520, 0x0dd45,
-    /* 2040 */ 0x0b5a0, 0x056d0, 0x055b2, 0x049b0, 0x0a577,
-    /* 2045 */ 0x0a4b0, 0x0aa50, 0x1b255, 0x06d20, 0x0ada0,
-    /* 2050 */ 0x14b63, 0x09370, 0x049f8, 0x04970, 0x064b0,
-    /* 2055 */ 0x168a6, 0x0ea50, 0x06b20, 0x1a6c4, 0x0aae0,
-    /* 2060 */ 0x092e0, 0x0d2e3, 0x0c960, 0x0d557, 0x0d4a0,
-    /* 2065 */ 0x0da50, 0x05d55, 0x056a0, 0x0a6d0, 0x055d4,
-    /* 2070 */ 0x052d0, 0x0a9b8, 0x0a950, 0x0b4a0, 0x0b6a6,
-    /* 2075 */ 0x0ad50, 0x055a0, 0x0aba4, 0x0a5b0, 0x052b0,
-    /* 2080 */ 0x0b273, 0x06930, 0x07337, 0x06aa0, 0x0ad50,
-    /* 2085 */ 0x14b55, 0x04b60, 0x0a570, 0x054e4, 0x0d160,
-    /* 2090 */ 0x0e968, 0x0d520, 0x0daa0, 0x16aa6, 0x056d0,
-    /* 2095 */ 0x04ae0, 0x0a9d4, 0x0a4d0, 0x0d150, 0x0f252,
-    /* 2100 */ 0x0d520
-  ];
-
-  /** Lunar New Year dates (month, day) for 1900-2100, Gregorian. */
-  var _LUNAR_NEW_YEAR = [
-    /* 1900 */ [1,31],[2,19],[2,8],[1,29],[2,16],[2,4],[1,25],[2,13],[2,2],[1,22],
-    /* 1910 */ [2,10],[1,30],[2,18],[2,6],[1,26],[2,14],[2,3],[1,23],[2,11],[2,1],
-    /* 1920 */ [2,20],[2,8],[1,28],[2,16],[2,5],[1,24],[2,13],[2,2],[1,23],[2,10],
-    /* 1930 */ [1,30],[2,17],[2,6],[1,26],[2,14],[2,4],[1,24],[2,11],[1,31],[2,19],
-    /* 1940 */ [2,8],[1,27],[2,15],[2,5],[1,25],[2,13],[2,2],[1,22],[2,10],[1,29],
-    /* 1950 */ [2,17],[2,6],[1,27],[2,14],[2,3],[1,24],[2,12],[1,31],[2,18],[2,8],
-    /* 1960 */ [1,28],[2,15],[2,5],[1,25],[2,13],[2,2],[1,21],[2,9],[1,30],[2,17],
-    /* 1970 */ [2,6],[1,27],[2,15],[2,3],[1,23],[2,11],[1,31],[2,18],[2,7],[1,28],
-    /* 1980 */ [2,16],[2,5],[1,25],[2,13],[2,2],[2,20],[2,9],[1,29],[2,17],[2,6],
-    /* 1990 */ [1,27],[2,15],[2,4],[1,23],[2,10],[1,31],[2,19],[2,7],[1,28],[2,16],
-    /* 2000 */ [2,5],[1,24],[2,12],[2,1],[1,22],[2,9],[1,29],[2,18],[2,7],[1,26],
-    /* 2010 */ [2,14],[2,3],[1,23],[2,10],[1,31],[2,19],[2,8],[1,28],[2,16],[2,5],
-    /* 2020 */ [1,25],[2,12],[2,1],[1,22],[2,10],[1,29],[2,17],[2,6],[1,26],[2,13],
-    /* 2030 */ [2,3],[1,23],[2,11],[1,31],[2,19],[2,8],[1,28],[2,15],[2,4],[1,24],
-    /* 2040 */ [2,12],[2,1],[1,22],[2,10],[1,30],[2,17],[2,6],[1,26],[2,14],[2,2],
-    /* 2050 */ [1,23],[2,11],[2,1],[1,19],[2,8],[1,28],[2,15],[2,4],[1,24],[2,12],
-    /* 2060 */ [2,2],[1,21],[2,9],[1,29],[2,17],[2,5],[1,26],[2,14],[2,3],[1,23],
-    /* 2070 */ [2,11],[1,31],[2,19],[2,7],[1,27],[2,15],[2,5],[1,24],[2,12],[2,1],
-    /* 2080 */ [1,22],[2,9],[1,29],[2,17],[2,6],[1,26],[2,14],[2,3],[1,24],[2,10],
-    /* 2090 */ [1,30],[2,18],[2,7],[1,27],[2,15],[2,5],[1,25],[2,12],[2,1],[1,21],
-    /* 2100 */ [2,9]
-  ];
-
-  var _LUNAR_BASE_YEAR = 1900;
-
-  /**
-   * Extract leap month number from lunar info entry (0 = none).
-   */
-  function _leapMonth(lunarInfo) {
-    return (lunarInfo >> 16) & 0xf;
+  // Lunar months in civil-day order. A negative length marks a leap month.
+  const lunarEpoch = Date.parse(almanac.lunarStart + 'T00:00:00Z');
+  const lunarFirstYear = new Date(lunarEpoch).getUTCFullYear();
+  const yearStarts = [0];
+  for (const row of almanac.lunarMonths) {
+    yearStarts.push(yearStarts[yearStarts.length - 1] + row.reduce((sum, n) => sum + Math.abs(n), 0));
   }
 
-  /**
-   * Number of days in the leap month for a given year (0 if no leap).
-   */
-  function _leapDays(year) {
-    var idx = year - _LUNAR_BASE_YEAR;
-    if (idx < 0 || idx >= _LUNAR_INFO.length) { return 0; }
-    var info = _LUNAR_INFO[idx];
-    if (_leapMonth(info) === 0) { return 0; }
-    return (info & 0x10000) ? 30 : 29;
-  }
-
-  /**
-   * Which month is the leap month for the given lunar year (0 = none).
-   */
-  function _leapMonthOf(year) {
-    var idx = year - _LUNAR_BASE_YEAR;
-    if (idx < 0 || idx >= _LUNAR_INFO.length) { return 0; }
-    return _leapMonth(_LUNAR_INFO[idx]);
-  }
-
-  /**
-   * Number of days in a regular (non-leap) month of a lunar year.
-   * month: 1-12
-   */
-  function _monthDays(year, month) {
-    var idx = year - _LUNAR_BASE_YEAR;
-    if (idx < 0 || idx >= _LUNAR_INFO.length) { return 30; }
-    var info = _LUNAR_INFO[idx];
-    // Bit for month: month1 is bit 15 counting from bit 0
-    // months 1..12 are in bits 15..4
-    var bit = 16 - month;  // month 1 → bit 15, month 12 → bit 4
-    return (info & (1 << bit)) ? 30 : 29;
-  }
-
-  /**
-   * Total days in a lunar year.
-   */
-  function _yearDays(year) {
-    var total = 0;
-    for (var m = 1; m <= 12; m++) {
-      total += _monthDays(year, m);
-    }
-    total += _leapDays(year);
-    return total;
-  }
-
-  /**
-   * Get Lunar New Year date for a given year as a Date (UTC).
-   */
-  function _lunarNewYear(year) {
-    var idx = year - _LUNAR_BASE_YEAR;
-    if (idx < 0 || idx >= _LUNAR_NEW_YEAR.length) {
-      throw new Error("Year " + year + " out of lunar calendar range (1900-2100)");
-    }
-    var md = _LUNAR_NEW_YEAR[idx];
-    return _utcDate(year, md[0], md[1]);
-  }
-
-  /**
-   * Convert Gregorian date to Chinese lunar date.
-   *
-   * @param {number} year  — Gregorian year
-   * @param {number} month — Gregorian month (1-12)
-   * @param {number} day   — Gregorian day
-   * @returns {{ year: number, month: number, day: number, isLeap: boolean }}
-   */
   function solarToLunar(year, month, day) {
-    var target = _utcDate(year, month, day);
-
-    // Find the lunar year: the Lunar New Year that is on or before target
-    var lunarYear = year;
-    var lny = _lunarNewYear(lunarYear);
-    if (target < lny) {
-      lunarYear--;
-      lny = _lunarNewYear(lunarYear);
+    const target = _utcDate(year, month, day);
+    let offset = (target.getTime() - lunarEpoch) / 86400000;
+    if (!Number.isInteger(offset) || target.getUTCMonth() + 1 !== month || target.getUTCDate() !== day ||
+        offset < 0 || offset >= yearStarts[yearStarts.length - 1]) {
+      throw new RangeError('Invalid or unsupported Gregorian date');
     }
-
-    var offset = _daysBetween(lny, target); // days since LNY
-
-    var leapMon = _leapMonthOf(lunarYear);
-    var lunarMonth = 0;
-    var lunarDay = 0;
-    var isLeap = false;
-
-    // Walk through months
-    for (var m = 1; m <= 12; m++) {
-      var days = _monthDays(lunarYear, m);
-      if (offset < days) {
-        lunarMonth = m;
-        lunarDay = offset + 1;
-        break;
+    let yearIndex = Math.min(year - lunarFirstYear, almanac.lunarMonths.length - 1);
+    if (offset < yearStarts[yearIndex]) yearIndex--;
+    offset -= yearStarts[yearIndex];
+    let number = 0;
+    for (const length of almanac.lunarMonths[yearIndex]) {
+      if (length > 0) number++;
+      if (offset < Math.abs(length)) {
+        return { year: lunarFirstYear + yearIndex, month: number, day: offset + 1, isLeap: length < 0 };
       }
-      offset -= days;
-
-      // Check for leap month after month m
-      if (leapMon === m) {
-        var ldays = _leapDays(lunarYear);
-        if (offset < ldays) {
-          lunarMonth = m;
-          lunarDay = offset + 1;
-          isLeap = true;
-          break;
-        }
-        offset -= ldays;
-      }
+      offset -= Math.abs(length);
     }
-
-    // If we exhausted all months (shouldn't happen with valid data)
-    if (lunarMonth === 0) {
-      lunarMonth = 12;
-      lunarDay = offset + 1;
-    }
-
-    return { year: lunarYear, month: lunarMonth, day: lunarDay, isLeap: isLeap };
+    throw new RangeError('Incomplete lunar year');
   }
 
-  /**
-   * Convert Chinese lunar date to Gregorian date.
-   *
-   * @param {number}  year    — Lunar year
-   * @param {number}  month   — Lunar month (1-12)
-   * @param {number}  day     — Lunar day
-   * @param {boolean} isLeap  — Is this the leap instance of the month?
-   * @returns {{ year: number, month: number, day: number }}
-   */
-  function lunarToSolar(year, month, day, isLeap) {
-    if (isLeap === undefined) { isLeap = false; }
-
-    var leapMon = _leapMonthOf(year);
-    var lny = _lunarNewYear(year);
-
-    var offset = 0;
-
-    for (var m = 1; m < month; m++) {
-      offset += _monthDays(year, m);
-      if (leapMon === m) {
-        offset += _leapDays(year);
+  function lunarToSolar(year, month, day, isLeap = false) {
+    const index = year - lunarFirstYear;
+    const months = almanac.lunarMonths[index];
+    if (!months) throw new RangeError('Lunar year must be in 1900–2100');
+    let offset = yearStarts[index], number = 0;
+    for (const length of months) {
+      if (length > 0) number++;
+      if (number === month && (length < 0) === isLeap) {
+        if (!Number.isInteger(day) || day < 1 || day > Math.abs(length)) throw new RangeError('Invalid lunar day');
+        const d = new Date(lunarEpoch + (offset + day - 1) * 86400000);
+        return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
       }
+      offset += Math.abs(length);
     }
-
-    // If requesting the leap month itself, add the regular month first
-    if (isLeap && leapMon === month) {
-      offset += _monthDays(year, month);
-    }
-
-    offset += day - 1;
-
-    var result = new Date(lny.getTime() + offset * 86400000);
-    return {
-      year:  result.getUTCFullYear(),
-      month: result.getUTCMonth() + 1,
-      day:   result.getUTCDate()
-    };
+    throw new RangeError('Invalid lunar month');
   }
-
-  // ────────────────────────────────────────────────────────────────────────
-  // Lunar date formatting helpers
-  // ────────────────────────────────────────────────────────────────────────
 
   var _LUNAR_DAY_NAMES = [
     "初一", "初二", "初三", "初四", "初五", "初六", "初七", "初八", "初九", "初十",
@@ -838,6 +585,8 @@ const Calendar = (function () {
 
     // Solar terms
     getSolarTermDate:       getSolarTermDate,
+    termWallMillis,
+    monthWindow,
     lichunDate:             lichunDate,
     getMonthBoundaryDates:  getMonthBoundaryDates,
 

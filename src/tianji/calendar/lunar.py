@@ -1,81 +1,57 @@
-"""
-Lunar calendar utilities using the lunardate library.
+"""Gregorian / Chinese lunar conversions from the packaged new-moon calendar."""
 
-This module wraps lunardate to provide Chinese lunar date conversions
-used in various metaphysical calculations.
-"""
+from bisect import bisect_right
+from datetime import date, timedelta
+from itertools import accumulate
 
-from __future__ import annotations
+from tianji.calendar.almanac import DATA
 
-from datetime import date
-
-try:
-    from lunardate import LunarDate
-    _LUNARDATE_AVAILABLE = True
-except ImportError:
-    _LUNARDATE_AVAILABLE = False
-    LunarDate = None  # type: ignore
-
-
-def require_lunardate() -> None:
-    """Raise ImportError if lunardate is not installed."""
-    if not _LUNARDATE_AVAILABLE:
-        raise ImportError(
-            "lunardate is required for lunar calendar features. "
-            "Install it with: pip install lunardate"
-        )
+_BASE = date.fromisoformat(DATA["lunarStart"])
+_MONTHS = DATA["lunarMonths"]
+_YEAR_STARTS = list(accumulate((sum(map(abs, row)) for row in _MONTHS), initial=0))
 
 
 def solar_to_lunar(d: date) -> tuple[int, int, int, bool]:
-    """
-    Convert a Gregorian date to Chinese lunar date.
-
-    Returns:
-        (year, month, day, is_leap_month)
-    """
-    require_lunardate()
-    ld = LunarDate.fromSolarDate(d.year, d.month, d.day)
-    return ld.year, ld.month, ld.day, ld.isLeapMonth
+    offset = (d - _BASE).days
+    if not 0 <= offset < _YEAR_STARTS[-1]:
+        raise ValueError("Date outside the lunar calendar (lunar years 1900–2100)")
+    index = bisect_right(_YEAR_STARTS, offset) - 1
+    offset -= _YEAR_STARTS[index]
+    month = 0
+    for length in _MONTHS[index]:
+        month += length > 0
+        if offset < abs(length):
+            return _BASE.year + index, month, offset + 1, length < 0
+        offset -= abs(length)
+    raise RuntimeError("Incomplete lunar year")
 
 
 def lunar_to_solar(year: int, month: int, day: int, is_leap: bool = False) -> date:
-    """
-    Convert a Chinese lunar date to Gregorian date.
-
-    Args:
-        year: Lunar year
-        month: Lunar month (1–12)
-        day: Lunar day (1–30)
-        is_leap: Whether this is a leap month
-
-    Returns:
-        Gregorian date
-    """
-    require_lunardate()
-    ld = LunarDate(year, month, day, is_leap)
-    sd = ld.toSolarDate()
-    return date(sd.year, sd.month, sd.day)
+    index = year - _BASE.year
+    if not 0 <= index < len(_MONTHS):
+        raise ValueError("Lunar year must be in 1900–2100")
+    offset = _YEAR_STARTS[index]
+    number = 0
+    for length in _MONTHS[index]:
+        number += length > 0
+        if number == month and (length < 0) == is_leap:
+            if not 1 <= day <= abs(length):
+                raise ValueError("Invalid day for this lunar month")
+            return _BASE + timedelta(days=offset + day - 1)
+        offset += abs(length)
+    raise ValueError("Invalid month or leap month for this lunar year")
 
 
 def get_lunar_year(d: date) -> int:
-    """Get the Chinese lunar year for a Gregorian date."""
-    require_lunardate()
-    ld = LunarDate.fromSolarDate(d.year, d.month, d.day)
-    return ld.year
+    return solar_to_lunar(d)[0]
 
 
 def get_lunar_month(d: date) -> int:
-    """Get the Chinese lunar month for a Gregorian date."""
-    require_lunardate()
-    ld = LunarDate.fromSolarDate(d.year, d.month, d.day)
-    return ld.month
+    return solar_to_lunar(d)[1]
 
 
 def get_lunar_day(d: date) -> int:
-    """Get the Chinese lunar day for a Gregorian date."""
-    require_lunardate()
-    ld = LunarDate.fromSolarDate(d.year, d.month, d.day)
-    return ld.day
+    return solar_to_lunar(d)[2]
 
 
 def format_lunar_date(d: date) -> str:

@@ -6,7 +6,7 @@ Calculates the year, month, day, and hour pillars (年月日时柱) from a birth
 Key rules:
 - Year pillar: Changes at 立春 (Start of Spring), NOT at Lunar New Year or Jan 1
 - Month pillar: Changes at the 12 节 (jie) solar terms; stem computed via 五虎遁月
-- Day pillar: Computed from reference date 1900-01-01 = 甲子 (index 0)
+- Day pillar: Computed from reference date 1900-01-01 = 甲戌 (index 10)
 - Hour pillar: Based on double-hour (时辰); stem computed via 五鼠遁时
 """
 
@@ -17,7 +17,8 @@ from datetime import date, datetime
 
 from tianji.calendar.earthly_branches import EarthlyBranch, get_branch, get_branch_for_hour
 from tianji.calendar.heavenly_stems import HeavenlyStem, get_stem
-from tianji.calendar.solar_terms import lichun_date
+from tianji.calendar.almanac import beijing_time
+from tianji.calendar.solar_terms import get_jieqi_month, get_solar_term_datetime
 from tianji.calendar.stem_branch import StemBranch, date_to_day_jiazi, get_jiazi
 
 # 五虎遁月 — Month stem lookup table
@@ -41,27 +42,6 @@ _WUSHU_HOUR_STEM_START: dict[int, int] = {
     4: 8,  # 戊/癸 → 壬 (index 8)
 }
 
-# The 12 monthly solar terms (节) in order, aligned with branches 寅 to 丑
-# Month 1 (寅月) starts at 立春, Month 2 (卯月) at 惊蛰, etc.
-_MONTHLY_JIEQI = [
-    "立春",  # 1月 寅
-    "惊蛰",  # 2月 卯
-    "清明",  # 3月 辰
-    "立夏",  # 4月 巳
-    "芒种",  # 5月 午
-    "小暑",  # 6月 未
-    "立秋",  # 7月 申
-    "白露",  # 8月 酉
-    "寒露",  # 9月 戌
-    "立冬",  # 10月 亥
-    "大雪",  # 11月 子
-    "小寒",  # 12月 丑
-]
-
-# Branch indices for each month (starting from 寅=index 2)
-_MONTH_BRANCH_INDICES = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1]
-
-
 def compute_year_pillar(d: date) -> StemBranch:
     """
     Compute the year pillar (年柱).
@@ -69,10 +49,10 @@ def compute_year_pillar(d: date) -> StemBranch:
     The year changes at 立春 (Start of Spring), not at the solar or lunar New Year.
     If the date is before 立春 in the given year, use the previous year's stem-branch.
     """
+    d = beijing_time(d) if isinstance(d, datetime) else d
     year = d.year
-    lc = lichun_date(year)
-
-    if d < lc:
+    lichun = get_solar_term_datetime(year, "立春")
+    if d < (lichun if isinstance(d, datetime) else lichun.date()):
         # Before 立春: belongs to previous year
         year -= 1
 
@@ -96,55 +76,14 @@ def compute_month_pillar(d: date, year_stem_index: int) -> StemBranch:
     - ...
     - Month 12 starts at 小寒 (丑月)
     """
-    year = d.year
-    month_num, branch_idx = _determine_month_and_branch(d, year)
-
-    # Apply 五虎遁月: start stem for 寅月 (month 1, branch index 0 in _MONTH_BRANCH_INDICES)
-    base_stem_idx = _WUHU_MONTH_STEM_START[year_stem_index % 5]
-
-    # Month 1 corresponds to branch_idx position 0 in _MONTH_BRANCH_INDICES
-    # Month 2 → +1 stem, Month 3 → +2 stems, etc.
-    month_offset = _MONTH_BRANCH_INDICES.index(branch_idx)
-    stem_idx = (base_stem_idx + month_offset) % 10
-    get_branch(branch_idx)
-    get_stem(stem_idx)
+    month_offset = get_jieqi_month(d) - 1
+    branch_idx = (2 + month_offset) % 12
+    stem_idx = (_WUHU_MONTH_STEM_START[year_stem_index % 5] + month_offset) % 10
 
     # Find the StemBranch in the 60-cycle
     for sb in _iter_stem_branch(stem_idx, branch_idx):
         return sb
     raise RuntimeError("Failed to compute month pillar")
-
-
-def _determine_month_and_branch(d: date, year: int) -> tuple[int, int]:
-    """
-    Determine the BaZi month number and branch index for a date.
-    Returns (month_number 1-12, branch_index 0-11).
-    """
-    # Collect all 12 monthly jieqi boundaries for year and year+1
-    boundaries: list[tuple[date, int]] = []
-
-    for y in [year - 1, year, year + 1]:
-        from tianji.calendar.solar_terms import get_solar_term_date
-        for mi, term in enumerate(_MONTHLY_JIEQI):
-            try:
-                term_date = get_solar_term_date(y, term)
-                branch_idx = _MONTH_BRANCH_INDICES[mi]
-                boundaries.append((term_date, branch_idx))
-            except Exception:
-                pass
-
-    boundaries.sort(key=lambda x: x[0])
-
-    # Find the latest boundary that is <= d
-    current_branch_idx = 1  # default: 丑月
-    for bd, bi in boundaries:
-        if d >= bd:
-            current_branch_idx = bi
-        else:
-            break
-
-    month_num = _MONTH_BRANCH_INDICES.index(current_branch_idx) + 1
-    return month_num, current_branch_idx
 
 
 def _iter_stem_branch(stem_idx: int, branch_idx: int):
@@ -159,7 +98,7 @@ def compute_day_pillar(d: date) -> StemBranch:
     """
     Compute the day pillar (日柱).
 
-    Reference: 1900-01-01 = 甲子 (60-cycle index 0).
+    Reference: 1900-01-01 = 甲戌 (60-cycle index 10).
     """
     return date_to_day_jiazi(d)
 
@@ -208,11 +147,12 @@ class BaZiChart:
     hour_pillar: StemBranch = field(init=False)
 
     def __post_init__(self) -> None:
+        self.birth_dt = beijing_time(self.birth_dt)
         d = self.birth_dt.date()
         h = self.birth_dt.hour
 
-        self.year_pillar = compute_year_pillar(d)
-        self.month_pillar = compute_month_pillar(d, self.year_pillar.stem.index)
+        self.year_pillar = compute_year_pillar(self.birth_dt)
+        self.month_pillar = compute_month_pillar(self.birth_dt, self.year_pillar.stem.index)
         self.day_pillar = compute_day_pillar(d)
         self.hour_pillar = compute_hour_pillar(h, self.day_pillar.stem.index)
 
@@ -299,6 +239,7 @@ def create_chart(
     day: int,
     hour: int = 12,
     gender: str = "male",
+    minute: int = 0,
 ) -> BaZiChart:
     """
     Convenience factory to create a BaZi chart from simple parameters.
@@ -314,5 +255,5 @@ def create_chart(
         BaZiChart instance
     """
     from datetime import datetime as dt
-    birth = dt(year, month, day, hour)
+    birth = dt(year, month, day, hour, minute)
     return BaZiChart(birth_dt=birth, gender=gender)

@@ -11,10 +11,10 @@ from __future__ import annotations
 ZIWEI_GROUP_OFFSETS: dict[str, int] = {
     "紫微": 0,
     "天机": -1,
-    "太阳": -2,
-    "武曲": -3,
-    "天同": -4,
-    "廉贞": -6,
+    "太阳": -3,
+    "武曲": -4,
+    "天同": -5,
+    "廉贞": -8,
 }
 
 # 天府星系 (Tian Fu Group) — positions relative to Tian Fu

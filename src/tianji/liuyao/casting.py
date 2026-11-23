@@ -13,6 +13,8 @@ import random
 from dataclasses import dataclass
 from datetime import datetime
 
+from tianji.calendar.almanac import BEIJING, beijing_time
+from tianji.calendar.lunar import solar_to_lunar
 from tianji.liuyao.hexagram import TRIGRAMS, Hexagram, lines_to_hexagram
 
 
@@ -22,7 +24,7 @@ class CastResult:
     method: str                    # "time", "number", "coin"
     primary_hexagram: Hexagram     # 本卦 (primary hexagram)
     changed_hexagram: Hexagram | None  # 变卦 (changed hexagram, if moving lines exist)
-    raw_lines: list[int]           # Raw line values (6=old yin, 7=old yang, 8=young yin, 9=young yang)
+    raw_lines: list[int]           # Raw line values (6=old yin, 7=young yang, 8=young yin, 9=old yang)
     moving_lines: list[int]        # Line positions (1-based) that are moving (动爻)
     input_data: dict               # Original input used for casting
 
@@ -44,7 +46,7 @@ class CastResult:
         for i, (line, name) in enumerate(zip(self.raw_lines, line_names)):
             # Normalize for display
             is_yang = line in (7, 9, 1)
-            is_moving = line in (6, 7)
+            is_moving = line in (6, 9)
             sym = "⚊" if is_yang else "⚋"
             moving_mark = " ← 动爻" if is_moving else ""
             print(f"    {name}爻: {sym} {'阳' if is_yang else '阴'}{moving_mark}")
@@ -52,181 +54,48 @@ class CastResult:
 
 
 def _lines_to_hexagram_with_changes(lines: list[int]) -> tuple[Hexagram, Hexagram | None, list[int]]:
-    """
-    Convert raw line values to primary and changed hexagrams.
+    """Only old yin (6) and old yang (9) change, counted from the bottom."""
+    if len(lines) != 6 or any(line not in (6, 7, 8, 9) for line in lines):
+        raise ValueError("Expected six coin values in 6–9")
+    primary = lines_to_hexagram(lines)
+    moving = [i + 1 for i, line in enumerate(lines) if line in (6, 9)]
+    changed = lines_to_hexagram([int(line in (6, 7)) for line in lines]) if moving else None
+    return primary, changed, moving
 
-    Raw line encoding:
-    - 6 = Old Yin (老阴): Changes to Yang
-    - 7 = Old Yang (老阳): Changes to Yin
-    - 8 = Young Yin (少阴): Stays Yin
-    - 9 = Young Yang (少阳): Stays Yang
 
-    Args:
-        lines: List of 6 raw line values
+def cast_from_lines(lines: list[int]) -> CastResult:
+    """Read six recorded coin values in bottom-to-top order."""
+    primary, changed, moving = _lines_to_hexagram_with_changes(lines)
+    return CastResult("铜钱摇卦", primary, changed, list(lines), moving, {})
 
-    Returns:
-        (primary_hexagram, changed_hexagram_or_None, moving_line_positions)
-    """
-    # Primary hexagram: 6→yin(0), 7→yang(1), 8→yin(0), 9→yang(1)
-    primary_lines = []
-    for l in lines:
-        if l in (6, 8):
-            primary_lines.append(0)  # Yin
-        else:
-            primary_lines.append(1)  # Yang
 
-    primary = lines_to_hexagram(primary_lines)
-
-    # Moving lines
-    moving_positions = [i + 1 for i, l in enumerate(lines) if l in (6, 7)]
-
-    # Changed hexagram (if any moving lines)
-    changed = None
-    if moving_positions:
-        changed_lines = []
-        for l in lines:
-            if l == 6:
-                changed_lines.append(1)  # Old Yin → Yang
-            elif l == 7:
-                changed_lines.append(0)  # Old Yang → Yin
-            elif l == 8:
-                changed_lines.append(0)  # Young Yin stays Yin
-            else:
-                changed_lines.append(1)  # Young Yang stays Yang
-        changed = lines_to_hexagram(changed_lines)
-
-    return primary, changed, moving_positions
+def _numbered_lines(upper: int, lower: int, moving: int) -> list[int]:
+    # 先天 order: 1=乾 (code 7), through 8=坤 (code 0).
+    bits = TRIGRAMS[7 - (lower - 1) % 8].line_list + TRIGRAMS[7 - (upper - 1) % 8].line_list
+    raw = [7 if bit else 8 for bit in bits]
+    position = (moving - 1) % 6
+    raw[position] = 9 if bits[position] else 6
+    return raw
 
 
 def cast_by_time(dt: datetime | None = None) -> CastResult:
-    """
-    时间起卦 — Cast hexagram using current or provided datetime.
-
-    Algorithm:
-    1. Take year + month + day + hour numbers
-    2. Upper trigram = (year + month + day) % 8
-    3. Lower trigram = (year + month + day + hour) % 8
-    4. Moving line = (year + month + day + hour) % 6 + 1
-
-    Args:
-        dt: Datetime to use (defaults to now)
-
-    Returns:
-        CastResult
-    """
-    if dt is None:
-        dt = datetime.now()
-
-    year = dt.year
-    month = dt.month
-    day = dt.day
-    hour = dt.hour
-
-    # Sum of all components
-    total = year + month + day + hour
-
-    # Compute trigram indices (0–7, mapping to trigram codes)
-    # Order: 乾1(7) 兑2(6) 离3(5) 震4(4) 巽5(3) 坎6(2) 艮7(1) 坤8(0)
-    _ORDER = [7, 6, 5, 4, 3, 2, 1, 0]  # trigram codes in 先天八卦 order
-
-    upper_idx = (year + month + day) % 8
-    lower_idx = total % 8
-    moving_line_pos = total % 6 + 1  # 1–6
-
-    upper_code = _ORDER[upper_idx]
-    lower_code = _ORDER[lower_idx]
-
-    # Build 6 lines from trigrams
-    TRIGRAMS[upper_code]
-    TRIGRAMS[lower_code]
-
-    raw_lines = []
-    for i in range(3):
-        raw_lines.append(9 if ((lower_code >> i) & 1) else 8)
-    for i in range(3):
-        raw_lines.append(9 if ((upper_code >> i) & 1) else 8)
-
-    # Apply moving line
-    ml_idx = moving_line_pos - 1
-    if raw_lines[ml_idx] == 9:
-        raw_lines[ml_idx] = 7  # Young Yang → Old Yang (moving)
-    else:
-        raw_lines[ml_idx] = 6  # Young Yin → Old Yin (moving)
-
-    primary, changed, moving_positions = _lines_to_hexagram_with_changes(raw_lines)
-
-    return CastResult(
-        method="时间起卦",
-        primary_hexagram=primary,
-        changed_hexagram=changed,
-        raw_lines=raw_lines,
-        moving_lines=moving_positions,
-        input_data={
-            "datetime": dt.isoformat(),
-            "year": year, "month": month, "day": day, "hour": hour,
-        },
-    )
+    """梅花年月日时法: lunar year branch, month, day and double-hour (子=1)."""
+    dt = beijing_time(dt if dt is not None else datetime.now(BEIJING))
+    lunar_year, month, day, _ = solar_to_lunar(dt.date())
+    upper = (lunar_year - 4) % 12 + 1 + month + day
+    total = upper + ((dt.hour + 1) // 2) % 12 + 1
+    raw = _numbered_lines(upper, total, total)
+    primary, changed, moving = _lines_to_hexagram_with_changes(raw)
+    return CastResult("时间起卦", primary, changed, raw, moving, {
+        "datetime": dt.isoformat(), "year": dt.year, "month": dt.month, "day": dt.day, "hour": dt.hour,
+    })
 
 
 def cast_by_numbers(num1: int, num2: int, num3: int | None = None) -> CastResult:
-    """
-    数字起卦 — Cast hexagram using provided numbers.
-
-    Two-number method:
-    - num1 → upper trigram (num1 % 8)
-    - num2 → lower trigram (num2 % 8)
-    - (num1 + num2) % 6 + 1 → moving line
-
-    Three-number method:
-    - num1 → upper trigram
-    - num2 → lower trigram
-    - num3 → moving line
-
-    Args:
-        num1: First number (determines upper trigram)
-        num2: Second number (determines lower trigram)
-        num3: Optional third number (determines moving line)
-
-    Returns:
-        CastResult
-    """
-    _ORDER = [7, 6, 5, 4, 3, 2, 1, 0]
-
-    upper_idx = num1 % 8
-    lower_idx = num2 % 8
-
-    if num3 is not None:
-        moving_line_pos = num3 % 6 + 1
-    else:
-        moving_line_pos = (num1 + num2) % 6 + 1
-
-    upper_code = _ORDER[upper_idx]
-    lower_code = _ORDER[lower_idx]
-
-    # Build raw lines
-    raw_lines = []
-    for i in range(3):
-        raw_lines.append(9 if ((lower_code >> i) & 1) else 8)
-    for i in range(3):
-        raw_lines.append(9 if ((upper_code >> i) & 1) else 8)
-
-    # Apply moving line
-    ml_idx = moving_line_pos - 1
-    if raw_lines[ml_idx] == 9:
-        raw_lines[ml_idx] = 7
-    else:
-        raw_lines[ml_idx] = 6
-
-    primary, changed, moving_positions = _lines_to_hexagram_with_changes(raw_lines)
-
-    return CastResult(
-        method="数字起卦",
-        primary_hexagram=primary,
-        changed_hexagram=changed,
-        raw_lines=raw_lines,
-        moving_lines=moving_positions,
-        input_data={"num1": num1, "num2": num2, "num3": num3},
-    )
+    """Use num1 for the upper trigram, num2 for the lower, and num3 or their sum for the moving line."""
+    raw = _numbered_lines(num1, num2, num1 + num2 if num3 is None else num3)
+    primary, changed, moving = _lines_to_hexagram_with_changes(raw)
+    return CastResult("数字起卦", primary, changed, raw, moving, {"num1": num1, "num2": num2, "num3": num3})
 
 
 def cast_by_coins(seed: int | None = None) -> CastResult:

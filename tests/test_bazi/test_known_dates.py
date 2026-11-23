@@ -66,13 +66,13 @@ class TestLiChunBoundary:
 class TestDayPillarKnownDates:
     """Verify day pillar against reference dates."""
 
-    def test_reference_date_jiazi(self):
-        """1900-01-01 = 甲子 (universally accepted reference)."""
+    def test_reference_date_jiaxu(self):
+        """1900-01-01 = 甲戌 (cycle index 10)."""
         pillar = compute_day_pillar(date(1900, 1, 1))
         assert str(pillar) == "甲戌"
 
-    def test_day2_is_yichou(self):
-        """1900-01-02 = 乙丑 (reference + 1 day)."""
+    def test_day2_is_yihai(self):
+        """1900-01-02 = 乙亥 (reference + 1 day)."""
         pillar = compute_day_pillar(date(1900, 1, 2))
         assert str(pillar) == "乙亥"
 
@@ -81,7 +81,7 @@ class TestDayPillarKnownDates:
         pillar = compute_day_pillar(date(1900, 3, 2))
         assert str(pillar) == "甲戌"
 
-    def test_day59_is_guihai(self):
+    def test_day59_is_guiyou(self):
         """59 days after 甲戌 (1900-03-01) should be 癸酉."""
         pillar = compute_day_pillar(date(1900, 3, 1))
         assert str(pillar) == "癸酉"
@@ -189,8 +189,8 @@ class TestFullChartKnownDates:
         """
         Test chart for 1990-05-15 14:30.
         - Year: 庚午 (1990 is 庚午年, after 立春)
-        - Month: 辛巳 (4th month, 巳月; 庚년→戊寅起; 寅+3=巳, 戊+3=辛)
-        - Day: 庚午 (verified via day count from reference)
+        - Month: 辛巳 (4th month, 巳月; 庚年→戊寅起; 寅+3=巳, 戊+3=辛)
+        - Day: 庚辰 (day count from reference)
         - Hour: 癸未 (14:xx is 未时; 庚日→庚子起; 庚+未offset)
         """
         chart = BaZiChart(birth_dt=datetime(1990, 5, 15, 14, 30), gender="male")

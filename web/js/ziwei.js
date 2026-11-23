@@ -80,15 +80,15 @@ const ZiWei = (function () {
   /**
    * 紫微星系 (Zi Wei Group) — offsets relative to 紫微 position.
    *
-   * 紫微(0), 天机(-1), 太阳(-2), 武曲(-3), 天同(-4), 廉贞(-6)
+   * 紫微(0), 天机(-1), 太阳(-3), 武曲(-4), 天同(-5), 廉贞(-8)
    */
   var ZIWEI_GROUP_OFFSETS = {
     '紫微':  0,
     '天机': -1,
-    '太阳': -2,
-    '武曲': -3,
-    '天同': -4,
-    '廉贞': -6
+    '太阳': -3,
+    '武曲': -4,
+    '天同': -5,
+    '廉贞': -8
   };
 
   /**
@@ -186,16 +186,13 @@ const ZiWei = (function () {
     return ((2 + lunarMonth - 1 + hourBranch) % 12 + 12) % 12;
   }
 
-  /**
-   * getWuXingJu — determine the 五行局 number.
-   *
-   * Uses the WUXINGJU_TABLE indexed by 命宫 branch position.
-   *
-   * @param {number} lifePalacePos  Branch index of 命宫 (0–11)
-   * @returns {number}  Wu Xing Ju value (2, 3, 4, 5, or 6)
-   */
-  function getWuXingJu(lifePalacePos) {
-    return WUXINGJU_TABLE[lifePalacePos % 12];
+  // Without a year stem retain the one-argument legacy lookup. Charts always
+  // supply the year stem to derive the life palace's stem and 纳音 element.
+  function getWuXingJu(lifePalacePos, yearStemIndex) {
+    if (yearStemIndex == null) return WUXINGJU_TABLE[lifePalacePos % 12];
+    const stem = (2 + 2 * (yearStemIndex % 5) + (lifePalacePos + 10) % 12) % 10;
+    const group = (Math.floor(stem / 2) + Math.floor((lifePalacePos % 6) / 2) + 1) % 5;
+    return [3, 4, 2, 6, 5][group];
   }
 
   /** 五行局 name lookup. */
@@ -224,37 +221,16 @@ const ZiWei = (function () {
    * @returns {number}  Palace position (0–11) for 紫微
    */
   function computeZiweiPos(lunarDay, ju) {
-    // Step 1: find the base quotient
-    var quotient = Math.ceil(lunarDay / ju);
-
-    // Step 2: remainder tells us offset adjustment
-    var remainder = quotient * ju - lunarDay;
-
-    // Step 3: position based on quotient with remainder correction
-    // The base position = quotient + 1 (in branch index terms)
-    // Remainder adds or subtracts based on even/odd pattern
-    var pos = quotient + 1; // base position (1-indexed conceptually)
-
-    // Apply remainder-based correction using the standard lookup
-    // For even remainders: add remainder
-    // For odd remainders: subtract remainder
-    if (remainder === 0) {
-      // No correction needed
-    } else if (remainder % 2 === 0) {
-      pos += remainder;
-    } else {
-      pos -= remainder;
-    }
-
-    // Convert to 0-based branch index and wrap
-    return ((pos - 1) % 12 + 12) % 12;
+    const quotient = Math.ceil(lunarDay / ju);
+    const padding = quotient * ju - lunarDay;
+    return (1 + quotient + (padding % 2 === 0 ? padding : -padding) + 12) % 12;
   }
 
   /**
    * computeTianfuPos — calculate 天府星 position from 紫微 position.
    *
    * Formula: (12 - ziweiPos + 4) % 12
-   * Tian Fu mirrors Zi Wei across the 辰戌 axis.
+   * Tian Fu mirrors Zi Wei across the 寅申 axis.
    *
    * @param {number} ziweiPos  紫微 palace position (0–11)
    * @returns {number}  天府 palace position (0–11)
@@ -273,7 +249,13 @@ const ZiWei = (function () {
    * @param {string} [gender]    "male" or "female" (default "male")
    * @returns {object}  Complete chart with palaces and star placements
    */
-  function createChart(lunarYear, lunarMonth, lunarDay, hour, gender) {
+  function createChart(lunarYear, lunarMonth, lunarDay, hour, gender, isLeap = false) {
+    if (!Number.isInteger(hour) || hour < 0 || hour > 23 ||
+        !Number.isInteger(lunarMonth) || lunarMonth < 1 || lunarMonth > 12 ||
+        !Number.isInteger(lunarDay) || lunarDay < 1 || lunarDay > 30) throw new RangeError('Invalid lunar birth date or time');
+    if (typeof Calendar !== 'undefined' && (isLeap || (lunarYear >= 1900 && lunarYear <= 2100))) {
+      Calendar.lunarToSolar(lunarYear, lunarMonth, lunarDay, isLeap);
+    }
     if (!gender) gender = 'male';
 
     // Map clock hour to 时辰 branch index (子=0, 丑=1, ...)
@@ -295,7 +277,7 @@ const ZiWei = (function () {
     var bodyPalacePos = computeBodyPalacePos(lunarMonth, hourBranch);
 
     // ── 3. 五行局 ──
-    var ju = getWuXingJu(lifePalacePos);
+    var ju = getWuXingJu(lifePalacePos, yearStemIdx);
 
     // ── 4. 紫微星 position ──
     var ziweiPos = computeZiweiPos(lunarDay, ju);
@@ -341,6 +323,7 @@ const ZiWei = (function () {
     return {
       // Input parameters
       lunarYear: lunarYear,
+      isLeap,
       lunarMonth: lunarMonth,
       lunarDay: lunarDay,
       hour: hour,

@@ -6,7 +6,7 @@ This package provides the foundational calendar computations:
 - 地支 (Earthly Branches): 子丑寅卯辰巳午未申酉戌亥
 - 干支 (Stem-Branch pairs): 六十甲子 cycle
 - 24节气 (Solar Terms)
-- 农历 (Lunar Calendar) via lunardate
+- 农历 (Lunar Calendar)
 """
 
 from tianji.calendar.earthly_branches import (
@@ -42,6 +42,7 @@ from tianji.calendar.solar_terms import (
     SOLAR_TERMS,
     get_month_boundary_dates,
     get_solar_term_date,
+    get_solar_term_datetime,
     lichun_date,
 )
 from tianji.calendar.stem_branch import (
@@ -67,7 +68,7 @@ __all__ = [
     "StemBranch", "JIAZI_CYCLE", "date_to_day_jiazi", "get_jiazi",
     "get_jiazi_by_char", "jiazi_index_for_date",
     # Solar terms
-    "SOLAR_TERMS", "get_solar_term_date", "lichun_date", "get_month_boundary_dates",
+    "SOLAR_TERMS", "get_solar_term_date", "get_solar_term_datetime", "lichun_date", "get_month_boundary_dates",
     # Lunar calendar
     "solar_to_lunar", "lunar_to_solar", "format_lunar_date", "format_lunar_date_traditional",
 ]

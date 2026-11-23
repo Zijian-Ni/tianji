@@ -60,7 +60,7 @@ def _call_llm(system: str, user: str, config: Optional[LLMConfig] = None) -> str
     cfg = config or get_config().llm
     if not cfg.api_key:
         raise ValueError(
-            "No API key configured. Set OPENAI_API_KEY or ANTHROPIC_API_KEY, "
+            "No API key configured. Set OPENAI_API_KEY, "
             "or pass LLMConfig with api_key."
         )
 
@@ -84,26 +84,26 @@ def interpret_bazi(
     Returns:
         Natural language interpretation string
     """
-    from tianji.bazi.five_elements import analyze_five_elements
-    from tianji.bazi.ten_gods import compute_ten_gods
+    from tianji.bazi.five_elements import elements_from_chart
+    from tianji.bazi.ten_gods import ten_gods_from_chart
 
-    gods = compute_ten_gods(chart)
-    elements = analyze_five_elements(chart)
+    gods = ten_gods_from_chart(chart)
+    elements = elements_from_chart(chart)
 
     user_prompt = BAZI_ANALYSIS_TEMPLATE.format(
-        year=chart.year,
-        month=chart.month,
-        day=chart.day,
-        hour=chart.hour,
+        year=chart.birth_dt.year,
+        month=chart.birth_dt.month,
+        day=chart.birth_dt.day,
+        hour=chart.birth_dt.hour,
         gender=getattr(chart, "gender", "男"),
         year_pillar=chart.year_pillar,
         month_pillar=chart.month_pillar,
         day_pillar=chart.day_pillar,
         hour_pillar=chart.hour_pillar,
         day_master=chart.day_pillar.stem,
-        ten_gods=gods,
-        five_elements=elements,
-        missing_elements=elements.get("missing", "无") if isinstance(elements, dict) else "N/A",
+        ten_gods="、".join(f"{pos} {god.ten_god}" for pos, god in gods.items()),
+        five_elements=elements.summary(),
+        missing_elements="、".join(e.value for e in elements.missing_elements()) or "无",
     )
 
     result = _call_llm(BAZI_SYSTEM_PROMPT, user_prompt, config)
@@ -119,13 +119,23 @@ def interpret_liuyao(
     Interpret a Liu Yao hexagram using LLM.
 
     Args:
-        analysis: Result from liuyao.analysis.full_analysis()
+        analysis: LiuYaoAnalysis.to_dict() result or a legacy flat result
         question: The question being asked
         config: Optional LLM configuration override
 
     Returns:
         Natural language interpretation string
     """
+    from tianji.liuyao.hexagram import get_hexagram_by_number
+
+    primary = analysis.get("primary_hexagram") or {}
+    if primary.get("number"):
+        hexagram = get_hexagram_by_number(primary["number"])
+        changed = analysis.get("changed_hexagram") or {}
+        analysis = {**analysis, "hexagram_name": hexagram.name, "hexagram_symbol": hexagram.symbol,
+                    "upper_trigram": hexagram.upper.name, "lower_trigram": hexagram.lower.name,
+                    "transformed_name": changed.get("name", "")}
+
     transformed_section = ""
     if analysis.get("transformed_name"):
         transformed_section = f"**变卦**：{analysis['transformed_name']}（{analysis.get('transformed_symbol', '')}）"

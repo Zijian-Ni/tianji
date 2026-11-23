@@ -7,6 +7,18 @@ on:
     branches: [main]
 
 jobs:
+  browser-engine:
+    name: Browser calculation tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --test tests/web/calendar.test.cjs
+        env:
+          TZ: America/New_York
+
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest

@@ -9,11 +9,21 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class LLMConfig:
+    api_key: str = field(default="", repr=False)
+    provider: str = "openai"
+    model: str = "gpt-4o"
+    base_url: str | None = None
+    temperature: float = 0.7
+    max_tokens: int = 2000
+
+
+@dataclass
 class TianjiConfig:
     """Global configuration for tianji library."""
 
     # LLM settings
-    openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
+    openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""), repr=False)
     openai_base_url: str = field(default_factory=lambda: os.getenv("OPENAI_BASE_URL", ""))
     openai_model: str = field(default_factory=lambda: os.getenv("TIANJI_LLM_MODEL", "gpt-4o"))
     llm_temperature: float = 0.7
@@ -22,8 +32,15 @@ class TianjiConfig:
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
+    cors_origins: list[str] = field(default_factory=list)
+
     # Calendar settings
     use_solar_terms_for_month: bool = True  # Use solar terms (节气) for month boundaries
+
+    @property
+    def llm(self) -> LLMConfig:
+        return LLMConfig(api_key=self.openai_api_key, model=self.openai_model,
+                         base_url=self.openai_base_url or None, temperature=self.llm_temperature)
 
     @classmethod
     def from_env(cls) -> "TianjiConfig":

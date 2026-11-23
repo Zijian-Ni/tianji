@@ -48,7 +48,7 @@ const LiuYao = (function () {
    * @returns {number[]}
    */
   function trigramLines(code) {
-    return [(code >> 0) & 1, (code >> 1) & 1, (code >> 2) & 1];
+    return [(code >> 2) & 1, (code >> 1) & 1, code & 1];
   }
 
   // ════════════════════════════════════════════════════════════════
@@ -179,176 +179,50 @@ const LiuYao = (function () {
 
   /**
    * Convert 6 raw line values to a hexagram.
-   * Lines: 6=old yin→0, 7=old yang→1, 8=young yin→0, 9=young yang→1
+   * Lines: 6=old yin→0, 7=young yang→1, 8=young yin→0, 9=old yang→1
    * Also accepts plain 0/1.
    */
   function linesToHexagram(lines) {
     if (lines.length !== 6) throw new Error('Expected 6 lines, got ' + lines.length);
-    var normalized = [];
-    for (var i = 0; i < 6; i++) {
-      var l = lines[i];
-      if (l === 6 || l === 0 || l === 8) normalized.push(0);
-      else if (l === 7 || l === 1 || l === 9) normalized.push(1);
-      else normalized.push(l % 2);
-    }
-    var lowerCode = normalized[0] | (normalized[1] << 1) | (normalized[2] << 2);
-    var upperCode = normalized[3] | (normalized[4] << 1) | (normalized[5] << 2);
-    return getHexagramByTrigrams(upperCode, lowerCode);
+    if (!lines.every(n => [0, 1, 6, 7, 8, 9].includes(n))) throw new RangeError('Invalid line value');
+    const [a, b, c, d, e, f] = lines.map(n => n % 2);
+    return getHexagramByTrigrams((d << 2) | (e << 1) | f, (a << 2) | (b << 1) | c);
   }
 
-  // ════════════════════════════════════════════════════════════════
-  //  Internal: convert raw lines to primary + changed hexagrams
-  // ════════════════════════════════════════════════════════════════
-
-  /**
-   * Raw line encoding:
-   *   6 = 老阴 (Old Yin):   line is Yin, changes to Yang
-   *   7 = 老阳 (Old Yang):  line is Yang, changes to Yin
-   *   8 = 少阴 (Young Yin): stays Yin
-   *   9 = 少阳 (Young Yang):stays Yang
-   *
-   * @param {number[]} rawLines  6 raw line values
-   * @returns {{ primary, changed, movingLines }}
-   */
-  function _processRawLines(rawLines) {
-    // Primary hexagram
-    var primaryBits = [];
-    for (var i = 0; i < 6; i++) {
-      primaryBits.push((rawLines[i] === 6 || rawLines[i] === 8) ? 0 : 1);
+  function castFromLines(rawLines) {
+    if (rawLines.length !== 6 || !rawLines.every(n => [6, 7, 8, 9].includes(n))) {
+      throw new RangeError('Expected six coin values in 6–9');
     }
-    var primary = linesToHexagram(primaryBits);
-
-    // Moving line positions (1-based)
-    var movingLines = [];
-    for (var i = 0; i < 6; i++) {
-      if (rawLines[i] === 6 || rawLines[i] === 7) {
-        movingLines.push(i + 1);
-      }
-    }
-
-    // Changed hexagram (变卦)
-    var changed = null;
-    if (movingLines.length > 0) {
-      var changedBits = [];
-      for (var i = 0; i < 6; i++) {
-        if (rawLines[i] === 6)      changedBits.push(1); // Old Yin → Yang
-        else if (rawLines[i] === 7) changedBits.push(0); // Old Yang → Yin
-        else if (rawLines[i] === 8) changedBits.push(0); // Young Yin stays
-        else                        changedBits.push(1); // Young Yang stays
-      }
-      changed = linesToHexagram(changedBits);
-    }
-
-    return { primary: primary, changed: changed, movingLines: movingLines };
+    const movingLines = [];
+    rawLines.forEach((n, index) => { if (n === 6 || n === 9) movingLines.push(index + 1); });
+    const changed = movingLines.length ? linesToHexagram(rawLines.map(n => Number(n === 6 || n === 7))) : null;
+    return { method: '铜钱摇卦', input: {}, rawLines: rawLines.slice(), primary: linesToHexagram(rawLines), changed, movingLines };
   }
 
-  // ════════════════════════════════════════════════════════════════
-  //  Casting Methods (起卦)
-  // ════════════════════════════════════════════════════════════════
+  function numberedCast(upper, lower, moving) {
+    function index(value, count) { return ((value - 1) % count + count) % count; }
+    const bits = trigramLines(7 - index(lower, 8)).concat(trigramLines(7 - index(upper, 8)));
+    const raw = bits.map(bit => bit ? 7 : 8);
+    const position = index(moving, 6);
+    raw[position] = bits[position] ? 9 : 6;
+    return castFromLines(raw);
+  }
 
-  /**
-   * 先天八卦 order: maps index 0–7 → trigram code.
-   *   0→乾(7), 1→兑(6), 2→离(5), 3→震(4), 4→巽(3), 5→坎(2), 6→艮(1), 7→坤(0)
-   */
-  var _XIANTIAN_ORDER = [7, 6, 5, 4, 3, 2, 1, 0];
+  function castByClock(year, month, day, hour) {
+    const lunar = Calendar.solarToLunar(year, month, day);
+    const upper = (lunar.year - 4) % 12 + 1 + lunar.month + lunar.day;
+    const total = upper + Math.floor((hour + 1) / 2) % 12 + 1;
+    return { ...numberedCast(upper, total, total), method: '时间起卦', input: { year, month, day, hour } };
+  }
 
-  /**
-   * castByTime — 时间起卦
-   *
-   * Algorithm:
-   *   upper trigram = (year + month + day) % 8
-   *   lower trigram = (year + month + day + hour) % 8
-   *   moving line   = (year + month + day + hour) % 6 + 1
-   *
-   * @param {Date} [date]  JS Date (defaults to now)
-   * @returns {object}  CastResult { method, primary, changed, rawLines, movingLines, input }
-   */
   function castByTime(date) {
-    if (!date) date = new Date();
-
-    var y = date.getFullYear();
-    var m = date.getMonth() + 1;
-    var d = date.getDate();
-    var h = date.getHours();
-    var total = y + m + d + h;
-
-    var upperIdx = (y + m + d) % 8;
-    var lowerIdx = total % 8;
-    var movingPos = total % 6 + 1; // 1–6
-
-    var upperCode = _XIANTIAN_ORDER[upperIdx];
-    var lowerCode = _XIANTIAN_ORDER[lowerIdx];
-
-    // Build 6 raw lines from trigram codes
-    var rawLines = [];
-    for (var i = 0; i < 3; i++) {
-      rawLines.push(((lowerCode >> i) & 1) ? 9 : 8);
-    }
-    for (var i = 0; i < 3; i++) {
-      rawLines.push(((upperCode >> i) & 1) ? 9 : 8);
-    }
-
-    // Apply moving line
-    var mlIdx = movingPos - 1;
-    rawLines[mlIdx] = (rawLines[mlIdx] === 9) ? 7 : 6;
-
-    var result = _processRawLines(rawLines);
-
-    return {
-      method: '时间起卦',
-      primary: result.primary,
-      changed: result.changed,
-      rawLines: rawLines,
-      movingLines: result.movingLines,
-      input: { year: y, month: m, day: d, hour: h }
-    };
+    if (date) return castByClock(date.getFullYear(), date.getMonth() + 1, date.getDate(), date.getHours());
+    const now = new Date(Date.now() + 8 * 3600000);
+    return castByClock(now.getUTCFullYear(), now.getUTCMonth() + 1, now.getUTCDate(), now.getUTCHours());
   }
 
-  /**
-   * castByNumbers — 数字起卦
-   *
-   * Two-number mode: n1 → upper, n2 → lower, moving = (n1+n2) % 6 + 1
-   * Three-number mode: n1 → upper, n2 → lower, n3 → moving line
-   *
-   * @param {number} n1
-   * @param {number} n2
-   * @param {number} [n3]
-   * @returns {object} CastResult
-   */
   function castByNumbers(n1, n2, n3) {
-    var upperIdx = n1 % 8;
-    var lowerIdx = n2 % 8;
-    var movingPos;
-    if (n3 !== undefined && n3 !== null) {
-      movingPos = n3 % 6 + 1;
-    } else {
-      movingPos = (n1 + n2) % 6 + 1;
-    }
-
-    var upperCode = _XIANTIAN_ORDER[upperIdx];
-    var lowerCode = _XIANTIAN_ORDER[lowerIdx];
-
-    var rawLines = [];
-    for (var i = 0; i < 3; i++) {
-      rawLines.push(((lowerCode >> i) & 1) ? 9 : 8);
-    }
-    for (var i = 0; i < 3; i++) {
-      rawLines.push(((upperCode >> i) & 1) ? 9 : 8);
-    }
-
-    var mlIdx = movingPos - 1;
-    rawLines[mlIdx] = (rawLines[mlIdx] === 9) ? 7 : 6;
-
-    var result = _processRawLines(rawLines);
-
-    return {
-      method: '数字起卦',
-      primary: result.primary,
-      changed: result.changed,
-      rawLines: rawLines,
-      movingLines: result.movingLines,
-      input: { n1: n1, n2: n2, n3: n3 || null }
-    };
+    return { ...numberedCast(n1, n2, n3 ?? n1 + n2), method: '数字起卦', input: { n1, n2, n3: n3 ?? null } };
   }
 
   /**
@@ -390,16 +264,7 @@ const LiuYao = (function () {
       rawLines.push(total); // 6, 7, 8, or 9
     }
 
-    var result = _processRawLines(rawLines);
-
-    return {
-      method: '铜钱摇卦',
-      primary: result.primary,
-      changed: result.changed,
-      rawLines: rawLines,
-      movingLines: result.movingLines,
-      input: { seed: seed || null }
-    };
+    return { ...castFromLines(rawLines), input: { seed: seed ?? null } };
   }
 
   // ════════════════════════════════════════════════════════════════
@@ -583,6 +448,8 @@ const LiuYao = (function () {
 
     // Casting 起卦
     castByTime: castByTime,
+    castByClock,
+    castFromLines,
     castByNumbers: castByNumbers,
     castByCoins: castByCoins,
 

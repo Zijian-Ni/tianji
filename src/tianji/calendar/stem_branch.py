@@ -4,7 +4,7 @@
 The 60-cycle (甲子 cycle) is formed by combining 10 Heavenly Stems and 12 Earthly Branches.
 Since GCD(10, 12) = 2, only 60 unique combinations exist.
 
-Reference epoch: 1900-01-01 (Gregorian) = 甲子日 (index 0 of 60-cycle)
+Reference epoch: 1900-01-01 (Gregorian) = 甲戌日 (index 10 of 60-cycle)
 """
 
 from __future__ import annotations

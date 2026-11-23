@@ -14,6 +14,8 @@ import argparse
 import sys
 from datetime import date, datetime
 
+from tianji import __version__
+
 
 def cmd_bazi(args: argparse.Namespace) -> None:
     """Run BaZi chart calculation."""
@@ -81,7 +83,7 @@ def main() -> None:
         prog="tianji",
         description="天机 — Chinese Metaphysics CLI (八字/六爻/紫微斗数)",
     )
-    parser.add_argument("--version", action="version", version="tianji 0.1.0")
+    parser.add_argument("--version", action="version", version=f"tianji {__version__}")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # BaZi subcommand

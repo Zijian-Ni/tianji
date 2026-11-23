@@ -9,8 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-from tianji.calendar.earthly_branches import EARTHLY_BRANCHES
-from tianji.ziwei.palaces import PALACE_NAMES
+from tianji.calendar.lunar import lunar_to_solar
+from tianji.calendar.earthly_branches import EARTHLY_BRANCHES, get_branch_by_char, get_branch_for_hour
+from tianji.ziwei.palaces import build_palace_ring
 from tianji.ziwei.stars import place_tianfu_group, place_ziwei_group
 
 
@@ -34,34 +35,25 @@ class ZiWeiChart:
 
     palaces: dict[str, ChartPalace] = field(default_factory=dict)
 
+    is_leap: bool = False
+
     def __post_init__(self):
         if not self.palaces:
             self._calculate()
 
     def _calculate(self):
         """Calculate the full chart."""
-        # Step 1: Determine Ming Palace (命宫) position
-        # Ming palace index = (month + hour_branch_index) mapped to 12 branches
-        hour_branch = self._hour_to_branch(self.hour)
-        (self.month - 1 + hour_branch) % 12
-        # Ming palace is counted from 寅 (index 2)
-        ming_position = (2 + self.month - 1 - hour_branch) % 12
+        if not 1 <= self.month <= 12 or not 1 <= self.day <= 30 or not 0 <= self.hour < 24:
+            raise ValueError("Expected lunar month 1–12, day 1–30, clock hour 0–23")
+        if self.is_leap or 1900 <= self.year <= 2100:
+            lunar_to_solar(self.year, self.month, self.day, self.is_leap)
+        hour_branch = get_branch_for_hour(self.hour).index
+        ming_position = (self.month + 1 - hour_branch) % 12
+        for palace in build_palace_ring(EARTHLY_BRANCHES[ming_position].char):
+            pos = get_branch_by_char(palace.branch).index
+            self.palaces[palace.name] = ChartPalace(palace.name, pos, palace.branch)
 
-        # Step 2: Place all 12 palaces starting from Ming
-        for i, (palace_name, _english, _meaning) in enumerate(PALACE_NAMES):
-            pos = (ming_position + i) % 12
-            branch = EARTHLY_BRANCHES[pos]
-            self.palaces[palace_name] = ChartPalace(
-                name=palace_name,
-                position=pos,
-                branch=branch.char,
-                stars=[],
-            )
-
-        # Step 3: Calculate Zi Wei star position from lunar day + wu_xing_ju
-        wu_xing_ju = self._get_wu_xing_ju(ming_position)
-        ziwei_pos = self._calc_ziwei_position(self.day, wu_xing_ju)
-
+        ziwei_pos = self._calc_ziwei_position(self.day, self.wu_xing_ju)
         # Step 4: Place Zi Wei group stars
         ziwei_stars = place_ziwei_group(ziwei_pos)
         for star_name, pos in ziwei_stars.items():
@@ -83,36 +75,27 @@ class ZiWeiChart:
                 return p
         return None
 
-    def _hour_to_branch(self, hour: int) -> int:
-        """Convert hour (0-23) to earthly branch index (0-11)."""
-        # 子时 23-1, 丑时 1-3, ... 亥时 21-23
-        return ((hour + 1) // 2) % 12
+    @property
+    def body_branch(self) -> str:
+        return EARTHLY_BRANCHES[(self.month + 1 + get_branch_for_hour(self.hour).index) % 12].char
 
-    def _get_wu_xing_ju(self, ming_pos: int) -> int:
-        """Get 五行局 number (2/3/4/5/6) from Ming palace position."""
-        # Simplified: based on stem-branch of Ming palace
-        # 水二局=2, 木三局=3, 金四局=4, 土五局=5, 火六局=6
-        table = [2, 6, 5, 3, 4, 2, 6, 5, 3, 4, 2, 6]
-        return table[ming_pos % 12]
+    @property
+    def wu_xing_ju(self) -> int:
+        """Five Tigers month stem at the life palace, then its 纳音 element."""
+        branch = self.palaces["命宫"].position
+        stem = (2 + 2 * ((self.year - 4) % 5) + (branch - 2) % 12) % 10
+        return (3, 4, 2, 6, 5)[(stem // 2 + (branch % 6) // 2 + 1) % 5]
 
-    def _calc_ziwei_position(self, lunar_day: int, wu_xing_ju: int) -> int:
-        """Calculate Zi Wei star position from lunar day and 五行局."""
-        # 紫微星安星法: day / wu_xing_ju, adjust based on remainder
-        quotient = lunar_day // wu_xing_ju
-        remainder = lunar_day % wu_xing_ju
-        if remainder == 0:
-            pos = quotient - 1
-        elif remainder % 2 == 1:
-            pos = quotient + 1
-        else:
-            pos = quotient
-        return (pos + 1) % 12  # offset to branch position
+    def _calc_ziwei_position(self, lunar_day: int, ju: int) -> int:
+        quotient = (lunar_day + ju - 1) // ju
+        padding = quotient * ju - lunar_day
+        return (1 + quotient + (padding if padding % 2 == 0 else -padding)) % 12
 
     def display(self) -> str:
         """Format chart for display."""
         lines = [
             "紫微斗数命盘",
-            f"出生：农历{self.year}年{self.month}月{self.day}日 {self.hour}时",
+            f"出生：农历{self.year}年{'闰' if self.is_leap else ''}{self.month}月{self.day}日 {self.hour}时",
             f"性别：{self.gender}",
             "",
         ]
@@ -128,6 +111,7 @@ def create_ziwei_chart(
     day: int,    # lunar day
     hour: int,
     gender: str = "男",
+    is_leap: bool = False,
 ) -> ZiWeiChart:
     """Create a Zi Wei Dou Shu chart."""
-    return ZiWeiChart(year=year, month=month, day=day, hour=hour, gender=gender)
+    return ZiWeiChart(year=year, month=month, day=day, hour=hour, gender=gender, is_leap=is_leap)

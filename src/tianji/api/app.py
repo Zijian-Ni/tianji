@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from tianji import __version__
 from tianji.config import get_config
 
 
@@ -15,14 +16,14 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="天机 API — Tianji",
         description="Chinese Metaphysics API: BaZi (八字), Liu Yao (六爻), Zi Wei Dou Shu (紫微斗数)",
-        version="0.1.0",
+        version=__version__,
         docs_url="/docs",
         redoc_url="/redoc",
     )
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=config.api.cors_origins,
+        allow_origins=config.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -33,6 +34,9 @@ def create_app() -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "service": "tianji", "version": "0.1.0"}
+        return {"status": "ok", "service": "tianji", "version": __version__}
 
     return app
+
+
+app = create_app()

@@ -25,14 +25,14 @@ class Trigram:
     """八卦 (Trigram) — composed of 3 lines."""
     name: str        # Chinese name (e.g. 乾)
     symbol: str      # Unicode symbol (e.g. ☰)
-    lines: int       # 3-bit integer: bit 2=top, bit 1=mid, bit 0=bottom (1=yang)
+    lines: int       # 3-bit integer: bit 2=bottom, bit 1=middle, bit 0=top (1=yang)
     element: str     # Associated element/attribute
     nature: str      # Nature/image
 
     @property
     def line_list(self) -> list[int]:
         """Return lines as list [bottom, middle, top], 1=yang, 0=yin."""
-        return [(self.lines >> i) & 1 for i in range(3)]
+        return [(self.lines >> i) & 1 for i in (2, 1, 0)]
 
     def __str__(self) -> str:
         return f"{self.symbol}{self.name}"
@@ -221,7 +221,7 @@ def lines_to_hexagram(lines: list[int]) -> Hexagram:
 
     Args:
         lines: List of 6 integers [bottom, ..., top], 1=yang, 0=yin
-               (moving lines: 6=old yin, 7=old yang are also accepted)
+               (moving lines: 6=old yin, 9=old yang are also accepted)
 
     Returns:
         The corresponding Hexagram
@@ -229,17 +229,10 @@ def lines_to_hexagram(lines: list[int]) -> Hexagram:
     if len(lines) != 6:
         raise ValueError(f"Expected 6 lines, got {len(lines)}")
 
-    # Normalize: 6/8 → 0 (yin), 7/9 → 1 (yang)
-    normalized = []
-    for l in lines:
-        if l in (6, 0):
-            normalized.append(0)
-        elif l in (7, 1, 9):
-            normalized.append(1)
-        else:
-            normalized.append(l % 2)
-
-    lower_code = normalized[0] | (normalized[1] << 1) | (normalized[2] << 2)
-    upper_code = normalized[3] | (normalized[4] << 1) | (normalized[5] << 2)
+    if any(line not in (0, 1, 6, 7, 8, 9) for line in lines):
+        raise ValueError("Lines must be 0/1 or coin values 6–9")
+    a, b, c, d, e, f = (line % 2 for line in lines)
+    lower_code = (a << 2) | (b << 1) | c
+    upper_code = (d << 2) | (e << 1) | f
 
     return get_hexagram_by_trigrams(upper_code, lower_code)

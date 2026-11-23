@@ -131,11 +131,11 @@ class TestLinesToHexagram:
         assert h.number == 2
 
     def test_old_yin_yang(self):
-        """Old yin (6) and old yang (7) are normalized correctly."""
+        """Old yin (6) and old yang (9) are normalized correctly."""
         h = lines_to_hexagram([6, 6, 6, 6, 6, 6])  # All old yin → all yin
         assert h.number == 2  # 坤
 
-        h = lines_to_hexagram([7, 7, 7, 7, 7, 7])  # All old yang → all yang
+        h = lines_to_hexagram([9, 9, 9, 9, 9, 9])  # All old yang → all yang
         assert h.number == 1  # 乾
 
     def test_wrong_length(self):

@@ -1,277 +1,115 @@
-<!DOCTYPE html>
-<html lang="zh-CN" data-theme="dark">
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none';">
-  <title>天机 — 中国传统玄学计算 | Tianji</title>
-  <meta name="description" content="Pure offline Chinese metaphysics calculator — BaZi, Liu Yao, Zi Wei Dou Shu. Privacy-first, no data collection.">
-  <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/aurora-ink.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☯</text></svg>">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="description" content="天机传统历算工具。离线查询八字四柱、北京时间交节时刻、六爻卦象与紫微十二宫。">
+  <title>天机 · 八字排盘</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='2' y='2' width='60' height='60' rx='10' fill='%238e4231'/%3E%3Ctext x='32' y='47' text-anchor='middle' font-size='43' fill='%23fff0ce'%3E天%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css?v=0.4.0">
 </head>
 <body>
-  <!-- Background particle canvas -->
-  <canvas id="bg-canvas" aria-hidden="true"></canvas>
-
-  <!-- Skip link for accessibility -->
-  <a href="#main-content" class="skip-link">跳到主要内容</a>
-
-  <!-- Header -->
-  <header class="app-header" role="banner">
-    <div class="container">
-      <div class="header-left">
-        <h1 class="logo">☯ <span data-i18n="appTitle">天机</span></h1>
-        <p class="subtitle" data-i18n="appSubtitle">中国传统玄学计算</p>
-      </div>
-      <div class="header-right">
-        <button id="lang-toggle" class="btn btn-ghost" title="Switch Language" aria-label="Switch Language">中/EN</button>
-        <button id="theme-toggle" class="btn btn-ghost" title="Toggle Theme" aria-label="Toggle Theme">🌙</button>
-        <button id="share-btn" class="btn btn-ghost" data-i18n="share" aria-label="分享">分享</button>
+  <a class="skip" href="#workspace" data-i18n="skip">跳到排盘</a>
+  <header class="topbar">
+    <div class="shell toolbar">
+      <div class="brand" aria-label="天机 Tianji"><span class="seal" aria-hidden="true">天</span><span class="wordmark">天机 <small>TIANJI</small></span></div>
+      <div class="actions">
+        <button id="lang-toggle" type="button" aria-label="Switch to English" lang="en">EN</button>
+        <button id="theme-toggle" type="button"><span aria-hidden="true">◐</span> <span id="theme-label"></span></button>
+        <button id="share-btn" type="button" class="primary" data-i18n="shareChart">分享排盘</button>
       </div>
     </div>
   </header>
-
-  <!-- Hero Section -->
-  <section class="hero" aria-label="天机介绍">
-    <div class="hero-taiji" aria-hidden="true">☯</div>
-    <h2 class="hero-title" data-i18n="appTitle">天机</h2>
-    <p class="hero-subtitle" data-i18n="appSubtitle">中国传统玄学计算</p>
-    <button id="hero-cta-btn" class="hero-cta" data-i18n="quickStart" aria-label="快速开始">
-      快速开始
-    </button>
-  </section>
-
-  <!-- Decorative Divider -->
-  <div class="divider-ornament" aria-hidden="true">易 · 道 · 术</div>
-
-  <!-- Tab Navigation (Desktop) -->
-  <nav class="tab-nav" role="tablist" aria-label="功能选项">
-    <div class="container">
-      <button id="tab-bazi" class="tab active" role="tab" aria-selected="true" aria-controls="panel-bazi" data-panel="panel-bazi" data-i18n="tabBazi">八字排盘</button>
-      <button id="tab-liuyao" class="tab" role="tab" aria-selected="false" aria-controls="panel-liuyao" data-panel="panel-liuyao" data-i18n="tabLiuyao">六爻占卜</button>
-      <button id="tab-ziwei" class="tab" role="tab" aria-selected="false" aria-controls="panel-ziwei" data-panel="panel-ziwei" data-i18n="tabZiwei">紫微斗数</button>
+  <main class="shell">
+    <section class="masthead" aria-labelledby="panel-title">
+      <div class="mast-copy">
+        <p class="today"><span data-i18n="today">今日</span><span class="rule"></span><span id="today-date"></span></p>
+        <h1 id="panel-title">八字排盘</h1>
+        <p id="panel-description">输入公历出生时间，查看四柱、五行与交节时刻。</p>
+      </div>
+    </section>
+    <nav class="tabs" role="tablist" aria-label="排盘方式" data-aria="methods">
+      <button id="tab-bazi" role="tab" aria-selected="true" aria-controls="panel-bazi" data-tab="bazi"><b aria-hidden="true">☷</b><span data-i18n="tabBazi">八字排盘</span></button>
+      <button id="tab-liuyao" role="tab" aria-selected="false" tabindex="-1" aria-controls="panel-liuyao" data-tab="liuyao"><b aria-hidden="true">䷾</b><span data-i18n="tabLiuyao">六爻占卜</span></button>
+      <button id="tab-ziwei" role="tab" aria-selected="false" tabindex="-1" aria-controls="panel-ziwei" data-tab="ziwei"><b aria-hidden="true">✧</b><span data-i18n="tabZiwei">紫微斗数</span></button>
+    </nav>
+    <div id="workspace" tabindex="-1">
+      <section id="panel-bazi" class="workspace" role="tabpanel" aria-labelledby="tab-bazi">
+        <aside>
+          <form id="bazi-form" class="card form-card">
+            <h2 data-i18n="birthDetails">生辰资料</h2>
+            <div class="fields">
+              <label><span data-i18n="solarDate">公历日期</span><input id="bazi-date" type="date" min="1900-01-31" max="2100-12-31" value="1990-05-15" required></label>
+              <label><span data-i18n="birthClock">出生时间</span><input id="bazi-time" type="time" value="14:30" required></label>
+              <fieldset class="wide"><legend data-i18n="gender">性别</legend><div class="choices">
+                <label><input type="radio" name="bazi-gender" value="male" checked><span data-i18n="male">男</span></label>
+                <label><input type="radio" name="bazi-gender" value="female"><span data-i18n="female">女</span></label>
+              </div></fieldset>
+            </div>
+            <p class="hint" data-i18n="clockRule">北京时间 UTC+8，零点换日。性别用于确定大运顺逆。</p>
+            <div class="form-actions"><button type="button" id="example-btn" data-i18n="boundaryExample">立春交节示例</button><button type="button" id="now-btn" data-i18n="useNow">用此刻</button></div>
+          </form>
+          <div class="card terms" id="term-card" hidden><h2 data-i18n="termBasis">交节依据</h2><div id="term-window"></div></div>
+        </aside>
+        <div id="bazi-result" class="result" aria-live="polite"></div>
+      </section>
+      <section id="panel-liuyao" class="workspace" role="tabpanel" aria-labelledby="tab-liuyao" hidden>
+        <aside>
+          <form id="liuyao-form" class="card form-card">
+            <h2 data-i18n="castMethod">起卦方法</h2>
+            <label class="field"><span data-i18n="method">方式</span><select id="liuyao-method">
+              <option value="time" data-i18n="timeCast">时间起卦</option><option value="number" data-i18n="numberCast">数字起卦</option><option value="coin" data-i18n="coinCast">铜钱摇卦</option>
+            </select></label>
+            <div id="liuyao-time-inputs"><label class="field"><span data-i18n="castTime">起卦时间（UTC+8）</span><input id="cast-time" type="datetime-local" min="1900-01-31T00:00" max="2100-12-31T23:59" required></label></div>
+            <div id="liuyao-number-inputs" class="fields" hidden>
+              <label><span data-i18n="num1Label">数字一</span><input id="liuyao-num1" type="number" min="1" max="999" value="3" required></label>
+              <label><span data-i18n="num2Label">数字二</span><input id="liuyao-num2" type="number" min="1" max="999" value="7" required></label>
+              <label class="wide"><span data-i18n="num3Label">数字三（可选）</span><input id="liuyao-num3" type="number" min="1" max="999"></label>
+            </div>
+            <p id="cast-hint" class="hint"></p>
+            <button id="liuyao-cast-btn" class="primary full" type="submit" data-i18n="castNow">起卦</button>
+          </form>
+        </aside>
+        <div id="liuyao-result" class="result" aria-live="polite"></div>
+      </section>
+      <section id="panel-ziwei" class="workspace" role="tabpanel" aria-labelledby="tab-ziwei" hidden>
+        <aside>
+          <form id="ziwei-form" class="card form-card">
+            <h2 data-i18n="lunarBirth">农历生辰</h2>
+            <div class="fields">
+              <label><span data-i18n="lunarYear">年</span><input id="ziwei-year" type="number" min="1900" max="2100" value="1990" required></label>
+              <label><span data-i18n="lunarMonth">月</span><select id="ziwei-month"></select></label>
+              <label><span data-i18n="lunarDay">日</span><input id="ziwei-day" type="number" min="1" max="30" value="21" required></label>
+              <label><span data-i18n="birthTime">出生时辰</span><select id="ziwei-hour"></select></label>
+              <fieldset class="wide"><legend data-i18n="gender">性别</legend><div class="choices">
+                <label><input type="radio" name="ziwei-gender" value="male" checked><span data-i18n="male">男</span></label>
+                <label><input type="radio" name="ziwei-gender" value="female"><span data-i18n="female">女</span></label>
+              </div></fieldset>
+            </div>
+            <p class="hint" data-i18n="ziweiRule">采用农历生辰，闰月按本月安宫。</p>
+            <button type="button" id="use-bazi" data-i18n="useBazi">从八字生辰换算</button>
+          </form>
+        </aside>
+        <div id="ziwei-result" class="result" aria-live="polite"></div>
+      </section>
     </div>
-  </nav>
-
-  <!-- Main Content -->
-  <main id="main-content" class="container">
-
-    <!-- BaZi Panel -->
-    <section id="panel-bazi" class="tab-panel active" role="tabpanel" aria-labelledby="tab-bazi">
-      <div class="card animate-spring">
-        <div class="card-header">
-          <h2 data-i18n="tabBazi">八字排盘</h2>
-        </div>
-        <div class="card-body">
-          <div class="form-row">
-            <div class="form-group">
-              <label for="bazi-date" data-i18n="birthDate">出生日期</label>
-              <input type="date" id="bazi-date" value="1990-05-15">
-            </div>
-            <div class="form-group">
-              <label for="bazi-hour" data-i18n="birthTime">出生时辰</label>
-              <select id="bazi-hour">
-                <option value="0">子时 (23:00-01:00)</option>
-                <option value="1">丑时 (01:00-03:00)</option>
-                <option value="2">寅时 (03:00-05:00)</option>
-                <option value="3">卯时 (05:00-07:00)</option>
-                <option value="4">辰时 (07:00-09:00)</option>
-                <option value="5">巳时 (09:00-11:00)</option>
-                <option value="6">午时 (11:00-13:00)</option>
-                <option value="7" selected>未时 (13:00-15:00)</option>
-                <option value="8">申时 (15:00-17:00)</option>
-                <option value="9">酉时 (17:00-19:00)</option>
-                <option value="10">戌时 (19:00-21:00)</option>
-                <option value="11">亥时 (21:00-23:00)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label data-i18n="gender">性别</label>
-              <div class="radio-group" role="radiogroup" aria-label="性别">
-                <label><input type="radio" name="bazi-gender" id="bazi-gender-male" value="male" checked> <span data-i18n="male">男</span></label>
-                <label><input type="radio" name="bazi-gender" id="bazi-gender-female" value="female"> <span data-i18n="female">女</span></label>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div id="bazi-result" class="stagger" aria-live="polite">
-        <canvas id="five-elements-chart" width="300" height="300" aria-label="五行力量雷达图"></canvas>
-      </div>
-    </section>
-
-    <!-- Liu Yao Panel -->
-    <section id="panel-liuyao" class="tab-panel" role="tabpanel" aria-labelledby="tab-liuyao" hidden>
-      <div class="card animate-spring">
-        <div class="card-header">
-          <h2 data-i18n="tabLiuyao">六爻占卜</h2>
-        </div>
-        <div class="card-body">
-          <div class="form-row">
-            <div class="form-group">
-              <label for="liuyao-method" data-i18n="castMethod">起卦方法</label>
-              <select id="liuyao-method">
-                <option value="time" data-i18n="timeCast">时间起卦</option>
-                <option value="number" data-i18n="numberCast">数字起卦</option>
-                <option value="coin" data-i18n="coinCast">铜钱摇卦</option>
-              </select>
-            </div>
-          </div>
-          <div id="liuyao-number-inputs" class="form-row" style="display:none;">
-            <div class="form-group">
-              <label for="liuyao-num1">数字一</label>
-              <input type="number" id="liuyao-num1" min="1" max="999" value="3">
-            </div>
-            <div class="form-group">
-              <label for="liuyao-num2">数字二</label>
-              <input type="number" id="liuyao-num2" min="1" max="999" value="7">
-            </div>
-            <div class="form-group">
-              <label for="liuyao-num3">数字三 (可选)</label>
-              <input type="number" id="liuyao-num3" min="1" max="999" placeholder="可选">
-            </div>
-          </div>
-          <button id="liuyao-cast-btn" class="btn btn-primary" data-i18n="castNow">
-            <span class="taiji-spinner" style="display:none;" aria-hidden="true">☯</span>
-            起卦
-          </button>
-        </div>
-      </div>
-      <div id="liuyao-result" class="stagger" aria-live="polite"></div>
-    </section>
-
-    <!-- Zi Wei Panel -->
-    <section id="panel-ziwei" class="tab-panel" role="tabpanel" aria-labelledby="tab-ziwei" hidden>
-      <div class="card animate-spring">
-        <div class="card-header">
-          <h2 data-i18n="tabZiwei">紫微斗数</h2>
-        </div>
-        <div class="card-body">
-          <p class="form-hint" data-i18n="lunarHint">请输入农历（阴历）出生日期</p>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="ziwei-year" data-i18n="lunarYear">年</label>
-              <input type="number" id="ziwei-year" min="1900" max="2100" value="1990">
-            </div>
-            <div class="form-group">
-              <label for="ziwei-month" data-i18n="lunarMonth">月</label>
-              <select id="ziwei-month">
-                <option value="1">正月</option>
-                <option value="2">二月</option>
-                <option value="3">三月</option>
-                <option value="4" selected>四月</option>
-                <option value="5">五月</option>
-                <option value="6">六月</option>
-                <option value="7">七月</option>
-                <option value="8">八月</option>
-                <option value="9">九月</option>
-                <option value="10">十月</option>
-                <option value="11">冬月</option>
-                <option value="12">腊月</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="ziwei-day" data-i18n="lunarDay">日</label>
-              <input type="number" id="ziwei-day" min="1" max="30" value="21">
-            </div>
-            <div class="form-group">
-              <label for="ziwei-hour" data-i18n="birthTime">时辰</label>
-              <select id="ziwei-hour">
-                <option value="0">子时</option>
-                <option value="1">丑时</option>
-                <option value="2">寅时</option>
-                <option value="3">卯时</option>
-                <option value="4">辰时</option>
-                <option value="5">巳时</option>
-                <option value="6">午时</option>
-                <option value="7" selected>未时</option>
-                <option value="8">申时</option>
-                <option value="9">酉时</option>
-                <option value="10">戌时</option>
-                <option value="11">亥时</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label data-i18n="gender">性别</label>
-              <div class="radio-group" role="radiogroup" aria-label="性别">
-                <label><input type="radio" name="ziwei-gender" id="ziwei-gender-male" value="male" checked> <span data-i18n="male">男</span></label>
-                <label><input type="radio" name="ziwei-gender" id="ziwei-gender-female" value="female"> <span data-i18n="female">女</span></label>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div id="ziwei-result" aria-live="polite"></div>
-    </section>
   </main>
-
-  <!-- Footer -->
-  <footer class="app-footer" role="contentinfo">
-    <div class="container">
-      <div class="privacy-notice">
-        <h3>🔒 <span data-i18n="privacy">隐私声明</span></h3>
-        <p data-i18n="privacyText">本工具完全在浏览器本地运行，不收集任何个人数据，不发送任何网络请求。您的出生信息仅用于本地计算，不会被存储或传输。</p>
-      </div>
-      <hr class="divider-pattern" aria-hidden="true">
-      <p class="footer-brand">☯ 天机 (Tianji) v0.3.0 — MIT License</p>
-      <p class="footer-links">
-        <a href="https://github.com/Zijian-Ni/tianji" target="_blank" rel="noopener">GitHub</a> ·
-        <a href="https://github.com/Zijian-Ni/tianji/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">贡献指南</a>
-      </p>
-    </div>
-  </footer>
-
-  <!-- Mobile Bottom Navigation -->
-  <nav class="bottom-nav" role="tablist" aria-label="底部导航">
-    <ul class="bottom-nav-items">
-      <li>
-        <button class="bottom-nav-item active" data-tab="bazi" role="tab" aria-selected="true" aria-controls="panel-bazi">
-          <span class="nav-icon" aria-hidden="true">卦</span>
-          <span data-i18n="tabBazi">八字</span>
-        </button>
-      </li>
-      <li>
-        <button class="bottom-nav-item" data-tab="liuyao" role="tab" aria-selected="false" aria-controls="panel-liuyao">
-          <span class="nav-icon" aria-hidden="true">爻</span>
-          <span data-i18n="tabLiuyao">六爻</span>
-        </button>
-      </li>
-      <li>
-        <button class="bottom-nav-item" data-tab="ziwei" role="tab" aria-selected="false" aria-controls="panel-ziwei">
-          <span class="nav-icon" aria-hidden="true">星</span>
-          <span data-i18n="tabZiwei">紫微</span>
-        </button>
-      </li>
-    </ul>
-  </nav>
-
-  <!-- Share Modal -->
-  <div id="share-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="分享" style="display:none;">
-    <div class="modal">
-      <div class="modal-header">
-        <h3 data-i18n="share">分享</h3>
-        <button class="modal-close" aria-label="关闭" onclick="document.getElementById('share-modal').style.display='none'">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="share-url">
-          <input type="text" id="share-url" readonly aria-label="分享链接">
-          <button id="copy-url-btn" class="btn btn-primary btn-sm" data-i18n="copyLink">复制链接</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Toast Container -->
-  <div id="toast-container" aria-live="assertive" aria-atomic="true"></div>
-
-  <!-- Scripts (loaded in order) -->
-  <script src="js/calendar.js"></script>
-  <script src="js/bazi.js"></script>
-  <script src="js/liuyao.js"></script>
-  <script src="js/ziwei.js"></script>
-  <script src="js/i18n.js"></script>
-  <script src="js/app.js"></script>
-  <script src="js/aurora-ink.js" defer></script>
+  <footer class="shell footer"><span>天机 · Tianji</span><span data-i18n="offline">本地计算 · 离线可用</span><a href="https://github.com/Zijian-Ni/tianji">GitHub</a></footer>
+  <dialog id="share-modal" aria-labelledby="share-heading">
+    <h2 id="share-heading" data-i18n="shareChart">分享排盘</h2>
+    <p class="hint" data-i18n="shareDetail">链接包含当前排盘资料，持有链接的人可以还原这张盘。</p>
+    <label class="field"><span data-i18n="chartLink">排盘链接</span><input id="share-url" type="text" readonly></label>
+    <div class="form-actions"><button id="copy-url-btn" class="primary" type="button" data-i18n="copyLink">复制链接</button><button id="close-share" type="button" data-i18n="close">关闭</button></div>
+    <p id="copy-status" role="status"></p>
+  </dialog>
+  <script src="js/almanac.js?v=0.4.0"></script>
+  <script src="js/calendar.js?v=0.4.0"></script>
+  <script src="js/bazi.js?v=0.4.0"></script>
+  <script src="js/liuyao.js?v=0.4.0"></script>
+  <script src="js/ziwei.js?v=0.4.0"></script>
+  <script src="js/i18n.js?v=0.4.0"></script>
+  <script src="js/views.js?v=0.4.0"></script>
+  <script src="js/app.js?v=0.4.0"></script>
 </body>
 </html>

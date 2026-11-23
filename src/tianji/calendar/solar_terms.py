@@ -1,16 +1,10 @@
-"""
-24节气 (Solar Terms) approximate calculation module.
-
-Solar terms are specific points in the tropical year, each separated by ~15°
-of solar longitude. This module provides approximate date calculation.
-
-For BaZi purposes, the most critical solar term is 立春 (Start of Spring),
-which determines the year boundary.
-"""
+"""Solar terms in Beijing standard time."""
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
+
+from tianji.calendar.almanac import DATA, beijing_time
 
 # 24 Solar Terms in order, starting from 小寒
 SOLAR_TERMS: tuple[str, ...] = (
@@ -66,19 +60,8 @@ def _jde_to_date(jde: float) -> date:
     return dt.date()
 
 
-def get_solar_term_date(year: int, term: str) -> date:
-    """
-    Get the approximate date of a solar term for a given year.
-
-    Accuracy: ±1–2 days for 1900–2100.
-
-    Args:
-        year: Gregorian year
-        term: Solar term name (e.g. "立春", "春分")
-
-    Returns:
-        Approximate date
-    """
+def _approximate_date(year: int, term: str) -> date:
+    """Legacy whole-day estimate for dates outside the packaged ephemeris."""
     if term not in _TERM_LONGITUDES:
         raise ValueError(f"Unknown solar term: {term!r}")
 
@@ -108,61 +91,32 @@ def get_solar_term_date(year: int, term: str) -> date:
     return d
 
 
+def get_solar_term_datetime(year: int, term: str) -> datetime:
+    """UTC+8 wall time, rounded to the nearest minute in the packaged ephemeris."""
+    if term not in _TERM_LONGITUDES:
+        raise ValueError(f"Unknown solar term: {term!r}")
+    index = year - DATA["termStart"]
+    if 0 <= index < len(DATA["termMinutes"]):
+        minutes = DATA["termMinutes"][index][SOLAR_TERMS.index(term)]
+        return datetime(year, 1, 1) + timedelta(minutes=minutes)
+    # Retain the historical date-only approximation outside the ephemeris.
+    return datetime.combine(_approximate_date(year, term), time.min)
+
+
+def get_solar_term_date(year: int, term: str) -> date:
+    return get_solar_term_datetime(year, term).date()
+
+
 def lichun_date(year: int) -> date:
-    """
-    Get the approximate date of 立春 (Start of Spring) for a given year.
-    立春 is critical for BaZi year pillar determination.
-
-    立春 typically falls on February 3–5.
-    """
-    d = get_solar_term_date(year, "立春")
-
-    # 立春 should be in January or February of the given year
-    # If our approximation is off, clamp to expected range
-    if d.month > 3 or d.year != year:
-        # Fallback: Feb 4 is the most common 立春 date
-        d = date(year, 2, 4)
-
-    return d
+    return get_solar_term_date(year, "立春")
 
 
 def get_month_boundary_dates(year: int) -> list[tuple[str, date]]:
-    """
-    Get all 12 monthly solar term (节) dates for a given year.
-    These are the 12 terms that start each Chinese month:
-    立春, 惊蛰, 清明, 立夏, 芒种, 小暑, 立秋, 白露, 寒露, 立冬, 大雪, 小寒
-
-    Returns list of (term_name, date) sorted by date.
-    """
-    monthly_terms = ["立春", "惊蛰", "清明", "立夏", "芒种", "小暑",
-                     "立秋", "白露", "寒露", "立冬", "大雪", "小寒"]
-
-    results = []
-    for term in monthly_terms:
-        d = get_solar_term_date(year, term)
-        results.append((term, d))
-
-    results_sorted = sorted(results, key=lambda x: x[1])
-    return results_sorted
+    return [(name, get_solar_term_date(year, name)) for name in SOLAR_TERMS[::2]]
 
 
 def get_jieqi_month(d: date) -> int:
-    """
-    Given a date, return the lunar month number (1–12) based on solar terms.
-    Month 1 starts at 立春, Month 2 at 惊蛰, etc.
-    """
-    year = d.year
-    boundaries = get_month_boundary_dates(year)
-    prev_boundaries = get_month_boundary_dates(year - 1)
-
-    all_boundaries = prev_boundaries + boundaries
-    all_boundaries_sorted = sorted(all_boundaries, key=lambda x: x[1])
-
-    month = 0
-    for _, boundary_date in all_boundaries_sorted:
-        if d >= boundary_date:
-            month += 1
-        else:
-            break
-
-    return ((month - 1) % 12) + 1
+    """BaZi month, with 寅 as 1. Date-only callers include the whole boundary day."""
+    moment = beijing_time(d) if isinstance(d, datetime) else datetime.combine(d, time.max)
+    boundary = get_solar_term_datetime(moment.year, SOLAR_TERMS[(moment.month - 1) * 2])
+    return (moment.month - (2 if moment >= boundary else 3)) % 12 + 1

@@ -63,8 +63,12 @@ const BaZi = (function () {
   function _elIdx(elStr) { return _C().ELEMENTS.indexOf(elStr); }
   /** Positive mod. */
   function _mod(n, m) { return ((n % m) + m) % m; }
-  /** Convert Calendar solar term {year,month,day} to local Date. */
-  function _toDate(obj) { return new Date(obj.year, obj.month - 1, obj.day); }
+  // A public Date denotes its local civil fields; internal numeric arguments
+  // encode those fields directly so the device timezone cannot alter a chart.
+  function wallMillis(value) {
+    if (typeof value === 'number') return value;
+    return Date.UTC(value.getFullYear(), value.getMonth(), value.getDate(), value.getHours(), value.getMinutes());
+  }
 
   // ────────────────────────────────────────────────────────────────
   // Constants
@@ -78,12 +82,6 @@ const BaZi = (function () {
 
   /** Monthly branch indices: BaZi month 1..12 → branch index. 寅(2)→丑(1). */
   var MONTH_BRANCH_INDICES = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1];
-
-  /** 12 monthly 节 (jié) in standard order. */
-  var MONTHLY_JIEQI = [
-    '立春', '惊蛰', '清明', '立夏', '芒种', '小暑',
-    '立秋', '白露', '寒露', '立冬', '大雪', '小寒'
-  ];
 
   /** Element names. */
   var ELEMENT_NAMES = ['木', '火', '土', '金', '水'];
@@ -134,9 +132,9 @@ const BaZi = (function () {
    */
   function computeYearPillar(date) {
     var C = _C();
-    var year = date.getFullYear();
-    var lichun = C.getLiChunDate(year);
-    if (date < lichun) year -= 1;
+    var millis = wallMillis(date);
+    var year = new Date(millis).getUTCFullYear();
+    if (millis < C.termWallMillis(year, '立春')) year -= 1;
 
     var idx = _mod(year - 4, 60);
     var stemIdx = idx % 10;
@@ -154,7 +152,8 @@ const BaZi = (function () {
    * Month determined by 节气 boundaries.
    */
   function computeMonthPillar(date, yearStemIndex) {
-    var branchIdx = _determineMonthBranch(date);
+    var term = _C().monthWindow(wallMillis(date)).previous.term;
+    var branchIdx = (_C().SOLAR_TERMS.indexOf(term) / 2 + 1) % 12;
     var baseStem = WUHU_TABLE[yearStemIndex % 5];
     var monthOffset = MONTH_BRANCH_INDICES.indexOf(branchIdx);
     if (monthOffset === -1) monthOffset = 0;
@@ -171,50 +170,13 @@ const BaZi = (function () {
   }
 
   /**
-   * Determine BaZi month branch by scanning 节气 boundaries.
-   * @private
-   */
-  function _determineMonthBranch(date) {
-    var C = _C();
-    var year = date.getFullYear();
-    var boundaries = [];
-
-    for (var dy = -1; dy <= 1; dy++) {
-      var y = year + dy;
-      for (var mi = 0; mi < MONTHLY_JIEQI.length; mi++) {
-        try {
-          var termDate = C.getSolarTermAsDate(y, MONTHLY_JIEQI[mi]);
-          if (termDate) {
-            boundaries.push({ date: termDate, branchIdx: MONTH_BRANCH_INDICES[mi] });
-          }
-        } catch (e) { /* skip */ }
-      }
-    }
-
-    boundaries.sort(function (a, b) { return a.date - b.date; });
-
-    var currentBranch = 1; // default 丑月
-    for (var i = 0; i < boundaries.length; i++) {
-      if (date >= boundaries[i].date) {
-        currentBranch = boundaries[i].branchIdx;
-      } else {
-        break;
-      }
-    }
-    return currentBranch;
-  }
-
-  /**
    * 日柱 — Day Pillar.
    * Reference: 1900-01-01 = 甲戌 (index 10).
    * Verified: 1949-10-01 = 甲子, 2004-07-21 = 辛丑.
    */
   function computeDayPillar(date) {
-    var refDate = new Date(1900, 0, 1);
-    var diffMs = date.getTime() - refDate.getTime();
-    var diffDays = Math.floor(diffMs / 86400000);
-
-    var idx = _mod(diffDays + 10, 60);
+    var civil = new Date(wallMillis(date));
+    var idx = _C().jiaziIndexForDate({ year: civil.getUTCFullYear(), month: civil.getUTCMonth() + 1, day: civil.getUTCDate() });
     var stemIdx = idx % 10;
     var branchIdx = idx % 12;
     return {
@@ -259,16 +221,19 @@ const BaZi = (function () {
    * @param {number} hour    0-23 (default 12)
    * @param {string} gender  "male" or "female"
    */
-  function createChart(year, month, day, hour, gender) {
+  function createChart(year, month, day, hour, gender, minute = 0) {
     if (hour === undefined || hour === null) hour = 12;
     if (!gender) gender = 'male';
 
-    var C = _C();
-    var dt = new Date(year, month - 1, day, hour);
-
-    var yearP = computeYearPillar(dt);
-    var monthP = computeMonthPillar(dt, yearP.stemIndex);
-    var dayP = computeDayPillar(dt);
+    const millis = Date.UTC(year, month - 1, day, hour, minute);
+    const civil = new Date(millis);
+    if (!Number.isInteger(minute) || civil.getUTCFullYear() !== year || civil.getUTCMonth() + 1 !== month ||
+        civil.getUTCDate() !== day || civil.getUTCHours() !== hour || civil.getUTCMinutes() !== minute) {
+      throw new RangeError('Invalid birth date or time');
+    }
+    var yearP = computeYearPillar(millis);
+    var monthP = computeMonthPillar(millis, yearP.stemIndex);
+    var dayP = computeDayPillar(millis);
     var hourP = computeHourPillar(hour, dayP.stemIndex);
     var dayMasterIdx = dayP.stemIndex;
 
@@ -277,7 +242,8 @@ const BaZi = (function () {
       birthMonth: month,
       birthDay: day,
       birthHour: hour,
-      birthDatetime: dt,
+      birthMinute: minute,
+      birthDatetime: new Date(year, month - 1, day, hour, minute),
       gender: gender,
       yearPillar: yearP,
       monthPillar: monthP,
@@ -735,13 +701,10 @@ const BaZi = (function () {
     var direction = isForward ? '顺行' : '逆行';
 
     // Find nearest 节 boundary
-    var birthDate = chart.birthDatetime;
-    var jieDate = _findNearestJie(birthDate, isForward);
-
-    // Days difference → start age (3 days ≈ 1 year)
-    var daysDiff = Math.abs(Math.round((jieDate.getTime() - birthDate.getTime()) / 86400000));
-    var startAge = Math.round(daysDiff / 3);
-    if (startAge === 0) startAge = 1;
+    var birth = Date.UTC(chart.birthYear, chart.birthMonth - 1, chart.birthDay, chart.birthHour, chart.birthMinute || 0);
+    var bounds = C.monthWindow(birth);
+    var jie = isForward && birth !== bounds.previous.millis ? bounds.next : bounds.previous;
+    var startAge = Math.max(1, Math.floor(Math.abs(jie.millis - birth) / (3 * 86400000)));
 
     // Birth year for computing calendar years
     var birthYear = chart.birthYear;
@@ -777,41 +740,6 @@ const BaZi = (function () {
       direction: direction,
       isForward: isForward
     };
-  }
-
-  /** Find the nearest 节 to birthDate in given direction. @private */
-  function _findNearestJie(birthDate, isForward) {
-    var C = _C();
-    var year = birthDate.getFullYear();
-    var jieDates = [];
-
-    for (var dy = -1; dy <= 1; dy++) {
-      var y = year + dy;
-      for (var mi = 0; mi < MONTHLY_JIEQI.length; mi++) {
-        try {
-          var d = C.getSolarTermAsDate(y, MONTHLY_JIEQI[mi]);
-          if (d) jieDates.push(d);
-        } catch (e) { /* skip */ }
-      }
-    }
-    jieDates.sort(function (a, b) { return a - b; });
-
-    if (isForward) {
-      for (var i = 0; i < jieDates.length; i++) {
-        if (jieDates[i] > birthDate) return jieDates[i];
-      }
-    } else {
-      var prev = null;
-      for (var j = 0; j < jieDates.length; j++) {
-        if (jieDates[j] < birthDate) {
-          prev = jieDates[j];
-        } else {
-          break;
-        }
-      }
-      if (prev) return prev;
-    }
-    return jieDates[0];
   }
 
   // ════════════════════════════════════════════════════════════════
